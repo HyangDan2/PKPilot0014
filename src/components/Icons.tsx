@@ -94,6 +94,9 @@ export const IconReset = (p: IconProps) => (
 export const IconCheck = (p: IconProps) => (<Svg {...p}><path d="m4.5 12.5 5 5 10-11" /></Svg>);
 export const IconLeft = (p: IconProps) => (<Svg {...p}><path d="m14.5 5-7 7 7 7" /></Svg>);
 export const IconRight = (p: IconProps) => (<Svg {...p}><path d="m9.5 5 7 7-7 7" /></Svg>);
+export const IconList = (p: IconProps) => (
+  <Svg {...p}><path d="M4 6.5h3M4 12h3M4 17.5h3" /><path d="M10 6.5h10M10 12h10M10 17.5h10" /></Svg>
+);
 export const IconMenu = (p: IconProps) => (<Svg {...p}><path d="M4 7h16M4 12h16M4 17h16" /></Svg>);
 export const IconNote = (p: IconProps) => (
   <Svg {...p}><path d="M6 3.5h9L19 7.5v13H6z" /><path d="M14.5 3.5v4h4" /><path d="M9 12h6M9 15.5h4" /></Svg>

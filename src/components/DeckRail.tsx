@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { StudioApi } from '../store/studio';
-import { STATUS_LABEL } from '../types/study';
+import { STATUS_LABEL, STATUS_SHORT } from '../types/study';
 import { plainText } from '../lib/markdown';
 import {
   IconCopy, IconDown, IconPlus, IconTrash, IconUp, IconUpload,
@@ -73,7 +73,7 @@ export function DeckRail({ studio, onOpenMarkdown, onToast, onClose }: Props) {
                 aria-label={`학습 상태: ${STATUS_LABEL[item.status]}`}
                 data-testid={`rail-status-${index}`}
               >
-                {STATUS_LABEL[item.status].slice(0, 2)}
+                {STATUS_SHORT[item.status]}
               </button>
 
               <div className="rail-actions">
@@ -106,7 +106,7 @@ export function DeckRail({ studio, onOpenMarkdown, onToast, onClose }: Props) {
         <button type="button" className="ghost-btn" onClick={onOpenMarkdown} data-testid="open-markdown">
           <IconUpload size={15} /><span>.md 파일 열기 / 붙여넣기</span>
         </button>
-        <p className="rail-hint">`드래그`로 순서를 바꾸고, 배지를 눌러 학습 상태를 돌립니다.</p>
+        <p className="rail-hint"><b>드래그</b>로 순서를 바꾸고, 배지를 눌러 학습 상태를 돌립니다.</p>
       </div>
     </aside>
   );

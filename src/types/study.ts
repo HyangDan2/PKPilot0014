@@ -2,6 +2,12 @@ export type StudyStatus = 'unlearned' | 'review' | 'done';
 
 export const STATUS_ORDER: StudyStatus[] = ['unlearned', 'review', 'done'];
 
+export const STATUS_SHORT: Record<StudyStatus, string> = {
+  unlearned: '미',
+  review: '복',
+  done: '완',
+};
+
 export const STATUS_LABEL: Record<StudyStatus, string> = {
   unlearned: '미학습',
   review: '복습 필요',

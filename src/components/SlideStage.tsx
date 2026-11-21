@@ -3,22 +3,28 @@ import type { StudioApi } from '../store/studio';
 import type { InkPoint } from '../types/study';
 import { INK_COLORS, STATUS_LABEL } from '../types/study';
 import { maskCount } from '../lib/mask';
+import { stripDuplicateTitle } from '../lib/split';
 import { RenderedMarkdown } from './RenderedMarkdown';
 import { InkLayer } from './InkLayer';
 import {
-  IconEdit, IconEye, IconEyeOff, IconHighlighter, IconPen, IconPresent, IconSplit, IconUndo, IconTrash,
+  IconEdit, IconEye, IconEyeOff, IconHighlighter, IconList, IconPen, IconPresent, IconSplit, IconUndo, IconTrash,
 } from './Icons';
 
 interface Props {
   studio: StudioApi;
   onPresent: () => void;
   onToast: (message: string) => void;
+  onToggleRail: () => void;
 }
 
-export function SlideStage({ studio, onPresent, onToast }: Props) {
+export function SlideStage({ studio, onPresent, onToast, onToggleRail }: Props) {
   const { deck, slide, settings, setSettings, updateSlide, toggleStatus, addStroke, undoStroke } = studio;
   const index = deck.slides.findIndex((item) => item.id === slide.id);
   const masks = useMemo(() => maskCount(slide.markdown), [slide.markdown]);
+  const bodyMarkdown = useMemo(
+    () => stripDuplicateTitle(slide.markdown, slide.title),
+    [slide.markdown, slide.title],
+  );
 
   const setView = (viewMode: 'view' | 'edit' | 'split') => setSettings({ viewMode });
 
@@ -31,6 +37,9 @@ export function SlideStage({ studio, onPresent, onToast }: Props) {
   return (
     <section className="stage" aria-label="슬라이드 스테이지">
       <div className="stage-bar">
+        <button type="button" className="icon-btn rail-toggle" onClick={onToggleRail} aria-label="슬라이드 목록" title="슬라이드 목록">
+          <IconList size={16} />
+        </button>
         <div className="seg" role="tablist" aria-label="보기 모드">
           <button
             type="button" role="tab" aria-selected={settings.viewMode === 'view'}
@@ -148,7 +157,7 @@ export function SlideStage({ studio, onPresent, onToast }: Props) {
           {settings.viewMode === 'view' && (
             <div className="slide-body">
               <RenderedMarkdown
-                markdown={slide.markdown}
+                markdown={bodyMarkdown}
                 maskAll={settings.maskAll}
                 theme={settings.theme}
                 className="slide-md"
@@ -190,7 +199,7 @@ export function SlideStage({ studio, onPresent, onToast }: Props) {
               </div>
               <div className="slide-body preview">
                 <RenderedMarkdown
-                  markdown={slide.markdown}
+                  markdown={bodyMarkdown}
                   maskAll={settings.maskAll}
                   theme={settings.theme}
                   className="slide-md"

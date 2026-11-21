@@ -9,7 +9,6 @@ import { PrintSheet } from './components/PrintSheet';
 import { ExportMdModal, MarkdownModal } from './components/Modals';
 import { parseStudyFile } from './lib/study';
 import { downloadText, readTextFile, safeFilename } from './lib/files';
-import { IconNote } from './components/Icons';
 import type { NoteExportMode } from './lib/study';
 
 export default function App() {
@@ -103,22 +102,15 @@ export default function App() {
           onClose={() => setRailOpen(false)}
         />
 
-        <SlideStage studio={studio} onPresent={() => setPresent(true)} onToast={notify} />
+        <SlideStage
+          studio={studio}
+          onPresent={() => setPresent(true)}
+          onToast={notify}
+          onToggleRail={() => setRailOpen((value) => !value)}
+        />
 
         <Notepad studio={studio} onToast={notify} />
       </main>
-
-      <button
-        type="button"
-        className={`rail-fab${railOpen ? ' on' : ''}`}
-        onClick={() => setRailOpen((value) => !value)}
-        aria-label="슬라이드 목록 열기"
-        aria-expanded={railOpen}
-        data-testid="rail-fab"
-      >
-        <IconNote size={18} />
-        <span>{studio.deck.slides.findIndex((slide) => slide.id === studio.slide.id) + 1}</span>
-      </button>
 
       <input
         ref={jsonRef}

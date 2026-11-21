@@ -225,6 +225,7 @@ export function plainText(src: string, limit = 140): string {
     .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
     .replace(/^#{1,6}\s*/gm, '')
     .replace(/[>*_~`|=#-]/g, ' ')
+    .replace(/={2}/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
   return text.length > limit ? `${text.slice(0, limit)}…` : text;

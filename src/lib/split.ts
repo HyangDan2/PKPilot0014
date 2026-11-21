@@ -58,6 +58,7 @@ function stripInlineMarkdown(text: string): string {
     .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
     .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
     .replace(/[*_~>]/g, '')
+    .replace(/={2}/g, '')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -151,4 +152,22 @@ export function deckTitleFrom(src: string, fallback = '가져온 덱'): string {
   const heading = /^\s{0,3}#\s+(.+?)\s*#*\s*$/m.exec(body);
   if (heading) return clampTitle(stripInlineMarkdown(heading[1]));
   return fallback;
+}
+
+
+/**
+ * A slide usually opens with its own heading, and the stage already prints that
+ * title in the card header. When the first heading is exactly the slide title,
+ * the stage drops it so the same line is not shown twice.
+ */
+export function stripDuplicateTitle(markdown: string, title: string): string {
+  const lines = markdown.split('\n');
+  let index = 0;
+  while (index < lines.length && !lines[index].trim()) index += 1;
+  const heading = /^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$/.exec(lines[index] ?? '');
+  if (!heading) return markdown;
+  if (stripInlineMarkdown(heading[2]) !== title) return markdown;
+  const rest = lines.slice(index + 1);
+  while (rest.length && !rest[0].trim()) rest.shift();
+  return rest.join('\n');
 }

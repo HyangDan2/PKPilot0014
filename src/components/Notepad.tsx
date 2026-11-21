@@ -11,9 +11,12 @@ interface Props {
 
 export function Notepad({ studio, onToast }: Props) {
   const { deck, slide, settings, setSettings, updateSlide, setSummary } = studio;
-  const [mode, setMode] = useState<'edit' | 'preview'>('edit');
+  const [mode, setMode] = useState<'edit' | 'preview'>('preview');
   const deckTab = settings.noteTab === 'deck';
   const value = deckTab ? deck.summary : slide.note;
+  // A note that already has words opens as reading text; an empty one opens as
+  // the editor, so the first tap after landing can start typing.
+  const editing = !value.trim() || mode === 'edit';
 
   const write = (text: string) => {
     if (deckTab) setSummary(text);
@@ -47,17 +50,17 @@ export function Notepad({ studio, onToast }: Props) {
           <small>{deckTab ? `${deck.slides.length}장 전체 요약 노트` : `${deck.slides.findIndex((s) => s.id === slide.id) + 1}장 · 이 슬라이드에 1:1로 묶인 노트`}</small>
         </div>
         <div className="seg small" role="tablist" aria-label="노트 보기">
-          <button type="button" role="tab" aria-selected={mode === 'edit'} className={mode === 'edit' ? 'on' : ''} onClick={() => setMode('edit')}>
+          <button type="button" role="tab" aria-selected={editing} className={editing ? 'on' : ''} onClick={() => setMode('edit')}>
             <IconEdit size={13} /><span>편집</span>
           </button>
-          <button type="button" role="tab" aria-selected={mode === 'preview'} className={mode === 'preview' ? 'on' : ''} onClick={() => setMode('preview')}>
+          <button type="button" role="tab" aria-selected={!editing} className={!editing ? 'on' : ''} onClick={() => setMode('preview')}>
             <IconEye size={13} /><span>미리보기</span>
           </button>
         </div>
       </div>
 
       <div className="note-body">
-        {mode === 'edit' ? (
+        {editing ? (
           <textarea
             className="md-input note-input"
             value={value}

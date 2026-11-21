@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { StudioApi } from '../store/studio';
 import { RenderedMarkdown } from './RenderedMarkdown';
 import { STATUS_LABEL } from '../types/study';
+import { stripDuplicateTitle } from '../lib/split';
 import { IconClose, IconEye, IconEyeOff, IconLeft, IconNote, IconRight } from './Icons';
 
 interface Props {
@@ -90,7 +91,7 @@ export function PresentMode({ studio, onClose }: Props) {
           </div>
           <div className="present-body">
             <RenderedMarkdown
-              markdown={slide.markdown}
+              markdown={stripDuplicateTitle(slide.markdown, slide.title)}
               maskAll={settings.maskAll}
               theme={settings.theme}
               className="slide-md present-md"
