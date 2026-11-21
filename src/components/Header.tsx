@@ -1,15 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import type { StudioApi } from '../store/studio';
 import {
-  IconCheck, IconDeck, IconDots, IconDownload, IconEdit, IconExternal, IconHelp,
-  IconMoon, IconPresent, IconPrinter, IconSpark, IconSun, IconTrash, IconUpload,
+  IconCheck, IconDeck, IconDots, IconDownload, IconEdit, IconExternal, IconHelp, IconHome,
+  IconMoon, IconPrinter, IconSpark, IconSun, IconTrash, IconUpload,
 } from './Icons';
 
 interface Props {
   studio: StudioApi;
   onOpenHelp: () => void;
   onOpenMarkdown: () => void;
-  onPresent: () => void;
+  /** Back to the landing page (the lecture catalog). */
+  onGoHome: () => void;
   onPrint: () => void;
   onOpenExport: () => void;
   onImportStudy: () => void;
@@ -18,7 +19,7 @@ interface Props {
 }
 
 export function Header({
-  studio, onOpenHelp, onOpenMarkdown, onPresent, onPrint, onOpenExport, onImportStudy,
+  studio, onOpenHelp, onOpenMarkdown, onGoHome, onPrint, onOpenExport, onImportStudy,
   onRestoreSample, onToast,
 }: Props) {
   const { decks, deck, settings, setSettings, selectDeck, createNewDeck, deleteDeck } = studio;
@@ -50,7 +51,10 @@ export function Header({
 
   return (
     <header className="topbar">
-      <button type="button" className="brand" onClick={() => setDeckOpen((value) => !value)} title="덱 선택">
+      <button
+        type="button" className="brand" onClick={onGoHome}
+        title="강의 목록으로" aria-label="HD2Lab 홈 — 강의 목록으로" data-testid="brand-home"
+      >
         <span className="brand-mark" aria-hidden><span className="mark" /></span>
         <span className="brand-name">HD2Lab</span>
         <span className="brand-div" aria-hidden />
@@ -139,13 +143,6 @@ export function Header({
         </button>
 
         <button
-          type="button" className="top-btn present-top" onClick={onPresent}
-          title="발표 모드 (F5)" aria-label="발표 모드" data-testid="header-present"
-        >
-          <IconPresent size={15} /><span>발표 모드</span><kbd>F5</kbd>
-        </button>
-
-        <button
           type="button" className="icon-btn"
           onClick={() => setSettings({ theme: dark ? 'light' : 'dark' })}
           aria-label={dark ? '라이트 테마로' : '다크 테마로'}
@@ -180,6 +177,16 @@ export function Header({
 
           {menuOpen && (
             <div className="popover menu-pop" role="menu" data-testid="nav-menu">
+              <p className="pop-head">HOME</p>
+              <button
+                type="button" role="menuitem" className="pop-item"
+                onClick={run(onGoHome)} data-testid="menu-home"
+              >
+                <span className="pop-ic"><IconHome size={14} /></span>
+                <span className="pop-text"><b>홈 · 강의 목록</b><small>랜딩 화면으로 돌아가기</small></span>
+                <span className="pop-key">HOME</span>
+              </button>
+              <span className="pop-sep" />
               <button
                 type="button" role="menuitem" className="pop-item help-first"
                 onClick={run(onOpenHelp)} data-testid="menu-help"
