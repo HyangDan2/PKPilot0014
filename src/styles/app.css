@@ -515,15 +515,15 @@ a { color: inherit; }
 .math-error { font-family: var(--mono); color: var(--error); }
 
 .glitra-mask {
-  display: inline; position: relative; padding: 0.05em 0.28em; margin: 0 0.05em;
+  display: inline-block; position: relative; min-width: 3.1em; padding: 0.05em 0.42em; margin: 0 0.08em;
   border-radius: 6px; background: var(--surface-3); border: 1px dashed var(--accent-line);
   color: transparent; cursor: pointer; transition: background 0.15s ease, color 0.15s ease;
   box-decoration-break: clone; -webkit-box-decoration-break: clone;
 }
 .glitra-mask .glitra-mask-ink { color: transparent; text-shadow: none; }
 .glitra-mask::after {
-  content: "가림막"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-  font-family: var(--mono); font-size: 8.5px; letter-spacing: 0.12em; color: var(--accent);
+  content: "가림"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono); font-size: 9px; font-weight: 600; letter-spacing: 0.14em; color: var(--accent);
 }
 .glitra-mask[data-revealed="true"] {
   background: color-mix(in srgb, var(--accent) 18%, transparent);
@@ -680,7 +680,9 @@ a { color: inherit; }
 @media print {
   @page { size: A4; margin: 12mm; }
   html, body { height: auto; overflow: visible; background: #fff; }
-  .app, .present, .modal-scrim, .toast { display: none !important; }
+  .app { display: block; height: auto; }
+  /* everything in the studio chrome goes away; only the study sheet prints */
+  .app > *:not(.print-sheet) { display: none !important; }
   .print-sheet { display: block; color: #1d192b; font-family: var(--font); }
   .print-head {
     display: flex; align-items: flex-start; justify-content: space-between;

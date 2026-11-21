@@ -1,5 +1,6 @@
 import type { StudioApi } from '../store/studio';
 import { RenderedMarkdown } from './RenderedMarkdown';
+import { stripDuplicateTitle } from '../lib/split';
 import { STATUS_LABEL } from '../types/study';
 
 /**
@@ -37,7 +38,12 @@ export function PrintSheet({ studio }: { studio: StudioApi }) {
           </header>
           <div className="print-cols">
             <div className="print-slide">
-              <RenderedMarkdown markdown={slide.markdown} maskAll theme="light" className="slide-md print-md" />
+              <RenderedMarkdown
+                markdown={stripDuplicateTitle(slide.markdown, slide.title)}
+                maskAll
+                theme="light"
+                className="slide-md print-md"
+              />
             </div>
             <div className="print-note">
               <p className="print-note-label">노트</p>
