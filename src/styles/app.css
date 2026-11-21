@@ -449,6 +449,7 @@ a { color: inherit; }
 .note-sheet { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 /* The bottom drawer and its bar only exist on a phone. */
 .drawer-bar, .drawer-scrim, .note-sheet-head { display: none; }
+.drawer-hint { font-style: normal; font-weight: 500; color: var(--muted); }
 .note-tabs { flex: none; display: flex; gap: 2px; padding: 8px 10px 0; border-bottom: 1px solid var(--line); }
 .note-tabs button {
   display: inline-flex; align-items: center; gap: 6px; height: 33px; padding: 0 11px;
@@ -668,6 +669,7 @@ a { color: inherit; }
   padding: 11px 18px; border-top: 1px solid var(--line); background: var(--surface-2);
 }
 .modal-actions { display: flex; align-items: center; gap: 7px; margin-left: auto; }
+.modal-actions .primary-btn, .modal-actions .ghost-btn { flex: none; white-space: nowrap; }
 .split-pick { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); }
 .split-pick button {
   display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 8px;
@@ -706,6 +708,12 @@ a { color: inherit; }
 .option-text b { font-size: 12.5px; }
 .option-text small { font-size: 10.5px; color: var(--muted); }
 .option-row code { font-family: var(--mono); font-size: 10px; color: var(--muted); }
+.file-target {
+  display: inline-flex; align-items: center; gap: 4px; min-width: 0; max-width: 240px;
+  margin-right: auto; font-family: var(--mono); font-size: 10.5px; color: var(--muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.export-hint { margin: 0; font-size: 11.5px; line-height: 1.55; color: var(--muted); }
 
 /* ── help modal ───────────────────────────────────────────────────────── */
 .help-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -873,6 +881,10 @@ a { color: inherit; }
   .stage-scroll { padding: 8px 9px 4px; }
   .stage-frame { gap: 7px; }
   .help-grid { grid-template-columns: 1fr; }
+  /* The export sheet: file name on its own line, one-row buttons under it. */
+  .modal-foot { flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 7px; }
+  .file-target { max-width: 100%; margin-right: 0; }
+  .modal-actions { margin-left: 0; justify-content: flex-end; }
   .stage-bar { padding: 7px 9px; gap: 5px; }
   .stage-tools { gap: 4px; }
   .top-btn span { display: none; }
@@ -881,6 +893,22 @@ a { color: inherit; }
   .deck-btn { max-width: 150px; padding: 0 8px; }
   .deck-btn-name { max-width: 92px; font-size: 12px; }
   .ext-link, .top-div { display: none; }
+  /* Phone bars carry icons only, so 타이머 · 테마 · ⋮ always fit on one line. */
+  .topbar { gap: 4px; padding: 0 6px 0 10px; }
+  .topbar-actions { gap: 4px; }
+  .topbar-actions > * { flex: none; }
+  .top-btn { width: 34px; height: 34px; padding: 0; justify-content: center; gap: 0; }
+  .top-btn span { display: none; }
+  .top-btn kbd { display: none; }
+  .present-top { width: 34px; }
+  .stage-tools .tool-btn {
+    min-width: 32px; height: 32px; padding: 0 6px; gap: 0; justify-content: center;
+  }
+  .stage-tools .tool-btn span { display: none; }
+  .stage-tools .tool-btn kbd { display: none; }
+  .present-btn { min-width: 34px; }
+  .seg button { padding: 0 8px; gap: 0; }
+  .seg button span { display: none; }
   .slide-card { min-height: 58vh; border-radius: 14px; }
   .slide-head { padding: 10px 13px 8px; }
   .slide-body { padding: 12px 14px; }
@@ -906,9 +934,20 @@ a { color: inherit; }
   .brand-mark .mark::after { inset: 3px -6px -6px 3px; border-width: 2px; }
   .deck-btn { padding: 0 7px; gap: 5px; }
   .deck-btn-name { display: none; }
-  .stage-tools .tool-btn span { display: none; }
-  .seg button span { display: none; }
-  .seg button { padding: 0 7px; }
+  .brand { gap: 5px; }
+  .brand-name { font-size: 15px; }
+  .brand-app { font-size: 12.5px; }
+  .topbar { padding: 0 4px 0 8px; }
   .note-tabs button { padding: 0 8px; font-size: 11px; }
   .note-tabs button span { max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+
+@media (max-width: 380px) {
+  .deck-btn-count { display: none; }
+  .deck-btn { padding: 0 6px; }
+  .topbar { gap: 3px; padding: 0 4px 0 7px; }
+  .topbar-actions { gap: 3px; }
+  .brand-mark { margin-right: 2px; }
+  .modal-foot { gap: 6px; }
+  .file-target { max-width: 130px; }
 }

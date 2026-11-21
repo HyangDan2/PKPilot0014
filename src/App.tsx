@@ -6,15 +6,16 @@ import { SlideStage } from './components/SlideStage';
 import { Notepad } from './components/Notepad';
 import { PresentMode } from './components/PresentMode';
 import { PrintSheet } from './components/PrintSheet';
-import { ExportMdModal, HelpModal, MarkdownModal } from './components/Modals';
+import { ExportModal, HelpModal, MarkdownModal } from './components/Modals';
 import { parseStudyFile } from './lib/study';
-import { downloadText, readTextFile, safeFilename } from './lib/files';
-import type { NoteExportMode } from './lib/study';
+import { downloadBytes, downloadText, readTextFile } from './lib/files';
+import { buildExportZip, deckNotesMarkdown, exportBaseName, exportFilename } from './lib/exportBundle';
+import type { ExportKind } from './lib/exportBundle';
 
 export default function App() {
   const studio = useStudio();
   const [openMd, setOpenMd] = useState(false);
-  const [exportMd, setExportMd] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [present, setPresent] = useState(false);
   const [printing, setPrinting] = useState(false);
@@ -64,16 +65,36 @@ export default function App() {
     );
   }
 
-  const downloadStudy = () => {
-    downloadText(`${safeFilename(studio.deck.title)}.study.json`, studio.exportStudy(), 'application/json');
-    notify('.study.json 백업을 내려받았습니다');
+  const downloadExport = (kind: ExportKind, noteMode: 'comment' | 'quote') => {
+    const deck = studio.deck;
+    const base = exportBaseName(deck);
+    const name = exportFilename(base, kind);
+    if (kind === 'study') {
+      downloadText(name, studio.exportStudy(), 'application/json');
+    } else if (kind === 'zip') {
+      downloadBytes(
+        name,
+        buildExportZip({
+          deck,
+          decks: studio.decks,
+          activeDeckId: studio.activeDeckId,
+          strokes: studio.strokes,
+        }),
+        'application/zip',
+      );
+    } else if (kind === 'notes') {
+      downloadText(name, deckNotesMarkdown(deck), 'text/markdown;charset=utf-8');
+    } else if (kind === 'slides') {
+      downloadText(name, studio.exportMarkdown('none'), 'text/markdown;charset=utf-8');
+    } else {
+      downloadText(name, studio.exportMarkdown(noteMode), 'text/markdown;charset=utf-8');
+    }
+    setExportOpen(false);
+    notify(kind === 'zip' ? 'ZIP 번들을 내려받았습니다 — 슬라이드 · 메모 · 백업 3개 파일' : `‘${name}’ 파일을 내려받았습니다`);
   };
 
-  const downloadMarkdown = (mode: NoteExportMode) => {
-    downloadText(`${safeFilename(studio.deck.title)}.md`, studio.exportMarkdown(mode), 'text/markdown;charset=utf-8');
-    setExportMd(false);
-    notify('마크다운으로 내보냈습니다');
-  };
+  const noteTotal = studio.deck.slides.filter((slide) => slide.note.trim()).length;
+  const inkTotal = Object.values(studio.strokes).reduce((sum, list) => sum + list.length, 0);
 
   const importStudy = async (file: File) => {
     try {
@@ -94,9 +115,8 @@ export default function App() {
         onOpenMarkdown={() => setOpenMd(true)}
         onPresent={() => setPresent(true)}
         onPrint={() => setPrinting(true)}
-        onExportStudy={downloadStudy}
+        onOpenExport={() => setExportOpen(true)}
         onImportStudy={() => jsonRef.current?.click()}
-        onExportMarkdown={() => setExportMd(true)}
         onRestoreSample={() => { studio.restoreSample(); notify('샘플 덱을 복원했습니다'); }}
         onToast={notify}
       />
@@ -114,7 +134,7 @@ export default function App() {
           onPresent={() => setPresent(true)}
           onToast={notify}
           onToggleRail={() => setRailOpen((value) => !value)}
-          keysEnabled={!present && !openMd && !exportMd && !helpOpen}
+          keysEnabled={!present && !openMd && !exportOpen && !helpOpen}
         />
 
         <Notepad studio={studio} onToast={notify} />
@@ -151,7 +171,16 @@ export default function App() {
         />
       )}
 
-      {exportMd && <ExportMdModal onClose={() => setExportMd(false)} onExport={downloadMarkdown} />}
+      {exportOpen && (
+        <ExportModal
+          baseName={exportBaseName(studio.deck)}
+          slideCount={studio.deck.slides.length}
+          noteCount={noteTotal}
+          inkCount={inkTotal}
+          onClose={() => setExportOpen(false)}
+          onExport={downloadExport}
+        />
+      )}
 
       {helpOpen && <HelpModal onClose={() => setHelpOpen(false)} />}
 

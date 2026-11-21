@@ -50,9 +50,11 @@
 - 발표 중에도 가림막 전체 토글 가능
 
 ### 내보내기 · 인쇄
+- **내보내기 한 곳(`⋮ → 내보내기`)**: 슬라이드만 · 메모만 · 슬라이드+메모 합본 · ZIP 번들 · 전체 백업
+- **슬라이드 + 메모 합본 `.md`**: `---` 구분 + frontmatter, 노트를 `<!-- note: -->` / `> **노트**` 중 선택
+- **ZIP 번들 `.zip`**: 슬라이드 `.md` · 메모 `.md` · `.study.json` 백업을 각각의 파일로 묶음 (fflate, 브라우저에서 생성)
+- **`.study.json` 백업/복원**: 덱·노트·상태·필기 스트로크 전체, `⋮ → .study.json 복원`으로 100% 되돌림
 - **학습지 PDF 인쇄**: `@media print` 전용 판면 — 슬라이드와 그 슬라이드의 노트를 2단으로, 덱 요약을 앞머리에
-- **`.study.json` 백업/복원**: 덱·노트·상태·필기 스트로크 전체
-- **`.md` 내보내기**: `---` 구분 + frontmatter, 노트를 `<!-- note: -->` / `> **노트**` / 제외 중 선택
 
 ### 테마
 - 기본 **Soft Iris(라이트)** — 공부방 눈 편안함
@@ -63,7 +65,8 @@
 ```bash
 npm install
 npm run dev        # http://localhost:5173/PKPilot0014/
-npm test           # 44 unit tests (vitest + happy-dom)
+npm test           # 69 unit tests (vitest + happy-dom)
+npm run test:e2e   # Playwright E2E (1440×900 · 390×844, 빌드 후 dist 검사)
 npm run build      # tsc --noEmit && vite build
 npm run preview    # http://localhost:4173/PKPilot0014/
 ```
