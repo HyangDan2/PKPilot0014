@@ -1,0 +1,195 @@
+import type {
+  Deck, SplitMode, StudyFile, Stroke, StudyStatus, StrokesBySlide, Slide,
+} from '../types/study';
+import { STATUS_ORDER } from '../types/study';
+import { deckTitleFrom, splitMarkdown } from './split';
+
+export function uid(prefix = 'id'): string {
+  const rand =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID().replace(/-/g, '').slice(0, 10)
+      : Math.random().toString(36).slice(2, 12);
+  return `${prefix}_${rand}`;
+}
+
+export function createSlide(markdown = '', note = '', title?: string): Slide {
+  const clean = markdown.trim();
+  return {
+    id: uid('sl'),
+    title: title || firstTitle(clean),
+    markdown: clean,
+    note,
+    status: 'unlearned',
+  };
+}
+
+function firstTitle(markdown: string): string {
+  if (!markdown) return '새 슬라이드';
+  const line = markdown.split('\n').find((l) => l.trim());
+  if (!line) return '새 슬라이드';
+  return line.replace(/^#{1,6}\s*/, '').replace(/[*_`~]/g, '').trim().slice(0, 80) || '새 슬라이드';
+}
+
+export function createDeck(title: string, slides: Slide[] = []): Deck {
+  const now = Date.now();
+  return {
+    id: uid('deck'),
+    title: title || '새 덱',
+    slides: slides.length ? slides : [createSlide('# 새 슬라이드\n\n여기에 학습 내용을 적어 보세요.')],
+    summary: '',
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+export function deckStats(deck: Deck): Record<StudyStatus, number> {
+  const stats: Record<StudyStatus, number> = { unlearned: 0, review: 0, done: 0 };
+  for (const slide of deck.slides) stats[slide.status] += 1;
+  return stats;
+}
+
+export function cycleStatus(status: StudyStatus): StudyStatus {
+  const index = STATUS_ORDER.indexOf(status);
+  return STATUS_ORDER[(index + 1) % STATUS_ORDER.length];
+}
+
+/** Round-trips the whole study room through one JSON document. */
+export function serializeStudy(input: {
+  decks: Deck[];
+  activeDeckId: string;
+  strokes: StrokesBySlide;
+}): string {
+  const file: StudyFile = {
+    format: 'saga-glitra-study',
+    version: 1,
+    app: 'Sága Glitra',
+    exportedAt: new Date().toISOString(),
+    activeDeckId: input.activeDeckId,
+    decks: input.decks,
+    strokes: input.strokes,
+  };
+  return `${JSON.stringify(file, null, 2)}\n`;
+}
+
+function normalizeStatus(value: unknown): StudyStatus {
+  return value === 'review' || value === 'done' ? value : 'unlearned';
+}
+
+function normalizeSlide(raw: any): Slide {
+  return {
+    id: typeof raw?.id === 'string' && raw.id ? raw.id : uid('sl'),
+    title: typeof raw?.title === 'string' && raw.title ? raw.title : firstTitle(String(raw?.markdown ?? '')),
+    markdown: typeof raw?.markdown === 'string' ? raw.markdown : '',
+    note: typeof raw?.note === 'string' ? raw.note : '',
+    status: normalizeStatus(raw?.status),
+  };
+}
+
+function normalizeDeck(raw: any): Deck {
+  const now = Date.now();
+  const slides = Array.isArray(raw?.slides) ? raw.slides.map(normalizeSlide) : [];
+  return {
+    id: typeof raw?.id === 'string' && raw.id ? raw.id : uid('deck'),
+    title: typeof raw?.title === 'string' && raw.title ? raw.title : '가져온 덱',
+    slides: slides.length ? slides : [createSlide('# 새 슬라이드\n\n여기에 학습 내용을 적어 보세요.')],
+    summary: typeof raw?.summary === 'string' ? raw.summary : '',
+    createdAt: typeof raw?.createdAt === 'number' ? raw.createdAt : now,
+    updatedAt: typeof raw?.updatedAt === 'number' ? raw.updatedAt : now,
+  };
+}
+
+function normalizeStroke(raw: any, slideId: string): Stroke | null {
+  if (!raw || !Array.isArray(raw.points) || raw.points.length === 0) return null;
+  const points = raw.points
+    .filter((p: any) => typeof p?.x === 'number' && typeof p?.y === 'number')
+    .map((p: any) => ({ x: p.x, y: p.y }));
+  if (points.length === 0) return null;
+  return {
+    id: typeof raw.id === 'string' && raw.id ? raw.id : `${slideId}_${uid('st')}`,
+    tool: raw.tool === 'pen' ? 'pen' : 'highlighter',
+    color: typeof raw.color === 'string' ? raw.color : '#f5c542',
+    width: typeof raw.width === 'number' ? raw.width : 14,
+    points,
+  };
+}
+
+export function parseStudyFile(text: string): StudyFile {
+  let raw: any;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    throw new Error('JSON을 읽을 수 없습니다. .study.json 백업 파일인지 확인하세요.');
+  }
+  if (!raw || typeof raw !== 'object') throw new Error('백업 파일의 형식이 올바르지 않습니다.');
+  if (raw.format && raw.format !== 'saga-glitra-study') {
+    throw new Error('Sága Glitra 백업 파일(.study.json)이 아닙니다.');
+  }
+  if (!Array.isArray(raw.decks) || raw.decks.length === 0) {
+    throw new Error('백업 파일에 덱이 없습니다.');
+  }
+
+  const decks: Deck[] = raw.decks.map(normalizeDeck);
+  const strokes: StrokesBySlide = {};
+  if (raw.strokes && typeof raw.strokes === 'object') {
+    for (const [slideId, list] of Object.entries<any>(raw.strokes)) {
+      if (!Array.isArray(list)) continue;
+      const clean = list.map((stroke) => normalizeStroke(stroke, slideId)).filter(Boolean) as Stroke[];
+      if (clean.length) strokes[slideId] = clean;
+    }
+  }
+  const activeDeckId = decks.some((deck) => deck.id === raw.activeDeckId)
+    ? raw.activeDeckId
+    : decks[0].id;
+
+  return {
+    format: 'saga-glitra-study',
+    version: 1,
+    app: 'Sága Glitra',
+    exportedAt: typeof raw.exportedAt === 'string' ? raw.exportedAt : new Date().toISOString(),
+    activeDeckId,
+    decks,
+    strokes,
+  };
+}
+
+export type NoteExportMode = 'comment' | 'quote' | 'none';
+
+/** The deck as one `.md` file: `---` between slides, notes as comments. */
+export function deckToMarkdown(deck: Deck, noteMode: NoteExportMode = 'comment'): string {
+  const head = [
+    '---',
+    `title: ${deck.title.replace(/"/g, "'")}`,
+    `slides: ${deck.slides.length}`,
+    `exported: ${new Date().toISOString()}`,
+    '---',
+    '',
+  ].join('\n');
+
+  const body = deck.slides
+    .map((slide) => {
+      const parts = [slide.markdown.trim()];
+      if (slide.note.trim() && noteMode !== 'none') {
+        parts.push(
+          noteMode === 'quote'
+            ? `> **노트**\n>\n${slide.note.trim().split('\n').map((line) => `> ${line}`).join('\n')}`
+            : `<!-- note:\n${slide.note.trim()}\n-->`,
+        );
+      }
+      return parts.join('\n\n');
+    })
+    .join('\n\n---\n\n');
+
+  return `${head}${body}\n`;
+}
+
+export interface ImportResult {
+  title: string;
+  slides: { markdown: string; note: string; title: string }[];
+}
+
+export function importMarkdown(text: string, mode: SplitMode, filename = ''): ImportResult {
+  const chunks = splitMarkdown(text, mode);
+  if (chunks.length === 0) throw new Error('마크다운에서 슬라이드를 찾지 못했습니다.');
+  const fallback = filename.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ') || '가져온 덱';
+  return { title: deckTitleFrom(text, fallback), slides: chunks };
+}
