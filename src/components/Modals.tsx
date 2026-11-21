@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { splitMarkdown } from '../lib/split';
+import { normalizeTags } from '../lib/tags';
 import type { SplitMode } from '../types/study';
 import type { ExportKind } from '../lib/exportBundle';
 import { exportFilename } from '../lib/exportBundle';
@@ -78,13 +79,31 @@ export function HelpModal({ onClose }: HelpModalProps) {
           </ul>
         </section>
 
+        <section className="help-card help-wide">
+          <h3>강의 라이브러리</h3>
+          <ul className="help-list">
+            <li>랜딩 위쪽 <b>검색창</b>은 제목 · 요약 · 태그를 한 번에 찾습니다. <b>태그 칩</b>을 누르면 그 태그가 붙은 강의만 남습니다.</li>
+            <li>강의는 한 페이지에 <b>10개</b>씩 — <b>이전 / 1 2 … / 다음</b>으로 넘깁니다. 검색어나 태그를 바꾸면 1페이지로 돌아갑니다.</li>
+            <li>태그는 <b>새 강의 만들기</b>에서 쉼표로 넣거나, `.md` frontmatter `tags: [Python, 기초]`, 본문 상단 `#해시태그`로도 읽습니다.</li>
+          </ul>
+        </section>
+
         <section className="help-card">
           <h3>가림막 · 필기</h3>
           <ul className="help-list">
             <li><code>==키워드==</code>는 가림막이 되어 눌러서 하나씩 열립니다.</li>
-            <li>상단 <b>가림막 전체</b> 토글로 한 번에 숨기거나 공개합니다.</li>
-            <li><b>필기</b>를 켜면 형광펜·펜으로 슬라이드 위에 바로 그립니다. 되돌리기와 획 지우기가 옆에 있습니다.</li>
+            <li>둘째 줄의 <b>가림막 전체</b> 눈 아이콘으로 한 번에 숨기거나 공개합니다. 보기 모드 아이콘은 펼친 책 모양이라 구분됩니다.</li>
+            <li><b>필기</b>를 켜면 둘째 줄 아래에 <b>필기 팔레트 줄</b>이 열립니다 — 형광펜·펜, 색, 되돌리기, 지우기가 그 줄에 모여 있어요.</li>
             <li>필기·편집 중에는 스와이프 넘김이 꺼져 그리기와 글자 선택을 방해하지 않습니다.</li>
+          </ul>
+        </section>
+
+        <section className="help-card">
+          <h3>슬라이드 드로워</h3>
+          <ul className="help-list">
+            <li>둘째 줄 왼쪽 <b>목록</b> 버튼을 누르면 드로워가 열립니다. 슬라이드를 고르면 자동으로 접힙니다.</li>
+            <li>순서·복제·삭제 팔레트는 <b>드로워 오른쪽 바깥</b>에 떠서 슬라이드 목록을 가리지 않습니다.</li>
+            <li>덱 전환은 둘째 줄의 <b>덱 드롭다운</b>에서 — 새 덱, 샘플 복원, 덱 삭제도 같은 곳입니다.</li>
           </ul>
         </section>
 
@@ -134,13 +153,14 @@ export function HelpModal({ onClose }: HelpModalProps) {
 
 interface NewDeckModalProps {
   onClose: () => void;
-  onCreate: (title: string) => void;
+  onCreate: (title: string, tags: string[]) => void;
 }
 
 /** From the landing: name a lecture before its first slide is written. */
 export function NewDeckModal({ onClose, onCreate }: NewDeckModalProps) {
   const [title, setTitle] = useState('');
-  const submit = () => onCreate(title.trim() || '새 강의');
+  const [tagText, setTagText] = useState('');
+  const submit = () => onCreate(title.trim() || '새 강의', normalizeTags(tagText));
 
   return (
     <Modal
@@ -167,7 +187,24 @@ export function NewDeckModal({ onClose, onCreate }: NewDeckModalProps) {
           data-testid="new-deck-name"
         />
       </label>
-      <p className="export-hint">첫 줄에 제목을 쓴 마크다운을 붙여넣거나, .md 파일을 가져와도 됩니다.</p>
+      <label className="stack">
+        <span className="field-label">태그 <small className="field-optional">선택</small></span>
+        <input
+          className="text-input"
+          value={tagText}
+          onChange={(event) => setTagText(event.target.value)}
+          onKeyDown={(event) => { if (event.key === 'Enter') submit(); }}
+          placeholder="예: Python, 기초, 3주차"
+          aria-label="새 강의 태그"
+          data-testid="new-deck-tags"
+        />
+      </label>
+      {normalizeTags(tagText).length > 0 && (
+        <p className="tag-preview" data-testid="new-deck-tag-preview">
+          {normalizeTags(tagText).map((tag) => <span key={tag} className="deck-tag-chip">{tag}</span>)}
+        </p>
+      )}
+      <p className="export-hint">태그는 랜딩에서 검색·필터에 쓰입니다. 첫 줄에 제목을 쓴 마크다운을 붙여넣거나, .md 파일을 가져와도 됩니다.</p>
     </Modal>
   );
 }

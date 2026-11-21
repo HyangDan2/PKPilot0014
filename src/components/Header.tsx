@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { StudioApi } from '../store/studio';
 import {
-  IconCheck, IconDeck, IconDots, IconDownload, IconEdit, IconExternal, IconHelp, IconHome,
-  IconMoon, IconPrinter, IconSpark, IconSun, IconTrash, IconUpload,
+  IconDots, IconDownload, IconEdit, IconExternal, IconHelp, IconHome, IconMoon, IconPrinter, IconSun,
+  IconUpload,
 } from './Icons';
 
 interface Props {
@@ -14,39 +14,35 @@ interface Props {
   onPrint: () => void;
   onOpenExport: () => void;
   onImportStudy: () => void;
-  onRestoreSample: () => void;
-  onToast: (message: string) => void;
 }
 
+/**
+ * The 56px title bar: the HD2Lab lockup on the left, then exactly three
+ * controls — 가져오기, 테마, ⋮ — so the menu button can never be pushed off a
+ * 390px phone. The deck switcher moved down to the stage bar.
+ */
 export function Header({
   studio, onOpenHelp, onOpenMarkdown, onGoHome, onPrint, onOpenExport, onImportStudy,
-  onRestoreSample, onToast,
 }: Props) {
-  const { decks, deck, settings, setSettings, selectDeck, createNewDeck, deleteDeck } = studio;
-  const [deckOpen, setDeckOpen] = useState(false);
+  const { settings, setSettings } = studio;
   const [menuOpen, setMenuOpen] = useState(false);
-  const [newName, setNewName] = useState('');
   const wrapRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
+    if (!menuOpen) return;
     const onDown = (event: MouseEvent) => {
-      if (!wrapRef.current?.contains(event.target as Node)) {
-        setDeckOpen(false);
-        setMenuOpen(false);
-      }
+      if (!wrapRef.current?.contains(event.target as Node)) setMenuOpen(false);
     };
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') { setDeckOpen(false); setMenuOpen(false); }
-    };
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') setMenuOpen(false); };
     document.addEventListener('mousedown', onDown);
     document.addEventListener('keydown', onKey);
     return () => {
       document.removeEventListener('mousedown', onDown);
       document.removeEventListener('keydown', onKey);
     };
-  }, []);
+  }, [menuOpen]);
 
-  const run = (fn: () => void) => () => { setDeckOpen(false); setMenuOpen(false); fn(); };
+  const run = (fn: () => void) => () => { setMenuOpen(false); fn(); };
   const dark = settings.theme === 'dark';
 
   return (
@@ -63,78 +59,6 @@ export function Header({
       </button>
 
       <div className="topbar-actions" ref={wrapRef}>
-        <div className="deck-switch">
-          <button
-            type="button"
-            className={`deck-btn${deckOpen ? ' open' : ''}`}
-            onClick={() => { setDeckOpen((value) => !value); setMenuOpen(false); }}
-            aria-haspopup="menu"
-            aria-expanded={deckOpen}
-            data-testid="deck-button"
-          >
-            <IconDeck size={15} />
-            <span className="deck-btn-name">{deck.title}</span>
-            <b className="deck-btn-count">{deck.slides.length}</b>
-          </button>
-
-          {deckOpen && (
-            <div className="popover deck-pop" role="menu" data-testid="deck-menu">
-              <p className="pop-head">DECKS</p>
-              {decks.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  role="menuitem"
-                  className={`pop-item${item.id === deck.id ? ' current' : ''}`}
-                  onClick={run(() => selectDeck(item.id))}
-                >
-                  <span className="pop-ic">{item.id === deck.id ? <IconCheck size={14} /> : <IconDeck size={14} />}</span>
-                  <span className="pop-text"><b>{item.title}</b><small>{item.slides.length}장 · {new Date(item.updatedAt).toLocaleDateString('ko-KR')}</small></span>
-                </button>
-              ))}
-              <span className="pop-sep" />
-              <div className="pop-new">
-                <input
-                  value={newName}
-                  onChange={(event) => setNewName(event.target.value)}
-                  placeholder="새 덱 이름"
-                  aria-label="새 덱 이름"
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') {
-                      createNewDeck(newName.trim() || '새 덱');
-                      setNewName('');
-                      setDeckOpen(false);
-                    }
-                  }}
-                />
-                <button
-                  type="button"
-                  className="primary-btn tiny"
-                  onClick={() => { createNewDeck(newName.trim() || '새 덱'); setNewName(''); setDeckOpen(false); }}
-                >
-                  만들기
-                </button>
-              </div>
-              <button type="button" role="menuitem" className="pop-item" onClick={run(onRestoreSample)}>
-                <span className="pop-ic"><IconSpark size={14} /></span>
-                <span className="pop-text"><b>샘플 덱 복원</b><small>Sága Glitra 사용법 5장</small></span>
-              </button>
-              <button
-                type="button" role="menuitem" className="pop-item danger"
-                onClick={run(() => {
-                  if (window.confirm(`‘${deck.title}’ 덱을 삭제할까요? 이 덱의 필기도 함께 지워집니다.`)) {
-                    deleteDeck(deck.id);
-                    onToast('덱을 삭제했습니다');
-                  }
-                })}
-              >
-                <span className="pop-ic"><IconTrash size={14} /></span>
-                <span className="pop-text"><b>이 덱 삭제</b><small>필기 스트로크도 함께 삭제</small></span>
-              </button>
-            </div>
-          )}
-        </div>
-
         <button
           type="button" className="top-btn" onClick={onOpenMarkdown}
           title=".md 파일 열기 / 붙여넣기" aria-label="가져오기 — .md 파일 열기" data-testid="header-open-md"
@@ -152,20 +76,11 @@ export function Header({
           {dark ? <IconSun size={17} /> : <IconMoon size={17} />}
         </button>
 
-        <span className="top-div" aria-hidden />
-
-        <a className="ext-link" href="https://hyangdan2.github.io/" target="_blank" rel="noopener noreferrer">
-          Web-HQ <IconExternal size={12} />
-        </a>
-        <a className="ext-link" href="https://hyangdan2.github.io/ApplicationHub/" target="_blank" rel="noopener noreferrer">
-          ApplicationHub <IconExternal size={12} />
-        </a>
-
         <div className="menu-wrap">
           <button
             type="button"
             className={`icon-btn menu-btn${menuOpen ? ' open' : ''}`}
-            onClick={() => { setMenuOpen((value) => !value); setDeckOpen(false); }}
+            onClick={() => setMenuOpen((value) => !value)}
             aria-haspopup="menu"
             aria-expanded={menuOpen}
             aria-label="더 보기 — 내보내기 · 백업 · 포털"

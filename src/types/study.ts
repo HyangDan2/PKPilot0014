@@ -27,6 +27,8 @@ export interface Deck {
   title: string;
   slides: Slide[];
   summary: string;
+  /** Short labels for the landing library: search, tag filter, card chips. */
+  tags: string[];
   createdAt: number;
   updatedAt: number;
 }

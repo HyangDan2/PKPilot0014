@@ -39,7 +39,7 @@ export interface StudioApi {
   selectDeck: (deckId: string) => void;
   selectSlide: (slideId: string) => void;
   goSlide: (delta: number) => void;
-  createNewDeck: (title?: string) => void;
+  createNewDeck: (title?: string, tags?: string[]) => void;
   deleteDeck: (deckId: string) => void;
   renameDeck: (title: string) => void;
   restoreSample: () => void;
@@ -63,7 +63,7 @@ export interface StudioApi {
 function makeDeckFromImport(text: string, filename: string, mode: SplitMode): Deck {
   const result = importMarkdown(text, mode, filename);
   const slides = result.slides.map((chunk) => createSlide(chunk.markdown, chunk.note, chunk.title));
-  return createDeck(result.title, slides);
+  return createDeck(result.title, slides, result.tags);
 }
 
 export function useStudio(): StudioApi {
@@ -204,8 +204,8 @@ export function useStudio(): StudioApi {
     });
   }, [deck]);
 
-  const createNewDeck = useCallback((title = '새 덱') => {
-    const made = createDeck(title);
+  const createNewDeck = useCallback((title = '새 덱', tags: string[] = []) => {
+    const made = createDeck(title, [], tags);
     setDecks((prev) => [made, ...prev]);
     setActiveDeckId(made.id);
     setActiveSlideId(made.slides[0].id);

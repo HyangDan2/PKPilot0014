@@ -80,8 +80,8 @@ export default function App() {
     setRailOpen(false);
   };
 
-  const createDeckFromLanding = (title: string) => {
-    studio.createNewDeck(title);
+  const createDeckFromLanding = (title: string, tags: string[]) => {
+    studio.createNewDeck(title, tags);
     setNewDeckOpen(false);
     setView('studio');
     notify(`‘${title}’ 강의를 만들었습니다`);
@@ -153,16 +153,14 @@ export default function App() {
             onPrint={() => setPrinting(true)}
             onOpenExport={() => setExportOpen(true)}
             onImportStudy={() => jsonRef.current?.click()}
-            onRestoreSample={() => { studio.restoreSample(); notify('샘플 덱을 복원했습니다'); }}
-            onToast={notify}
           />
 
           <main className="studio">
             <DeckRail
               studio={studio}
-              onOpenMarkdown={() => setOpenMd(true)}
               onToast={notify}
               onClose={() => setRailOpen(false)}
+              drawerOpen={railOpen}
             />
 
             <SlideStage
@@ -170,6 +168,7 @@ export default function App() {
               onPresent={() => setPresent(true)}
               onToast={notify}
               onToggleRail={() => setRailOpen((value) => !value)}
+              onRestoreSample={() => { studio.restoreSample(); notify('샘플 덱을 복원했습니다'); }}
               keysEnabled={!present && !openMd && !exportOpen && !helpOpen}
             />
 

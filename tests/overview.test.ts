@@ -7,7 +7,7 @@ function slide(status: Slide['status'], note = ''): Slide {
 }
 
 function deck(slides: Slide[]): Deck {
-  return { id: 'deck_1', title: '강의', slides, summary: '', createdAt: 0, updatedAt: 0 };
+  return { id: 'deck_1', title: '강의', slides, summary: '', tags: [], createdAt: 0, updatedAt: 0 };
 }
 
 describe('랜딩 강의 요약', () => {
