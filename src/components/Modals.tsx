@@ -132,6 +132,46 @@ export function HelpModal({ onClose }: HelpModalProps) {
   );
 }
 
+interface NewDeckModalProps {
+  onClose: () => void;
+  onCreate: (title: string) => void;
+}
+
+/** From the landing: name a lecture before its first slide is written. */
+export function NewDeckModal({ onClose, onCreate }: NewDeckModalProps) {
+  const [title, setTitle] = useState('');
+  const submit = () => onCreate(title.trim() || '새 강의');
+
+  return (
+    <Modal
+      title="새 강의 만들기"
+      subtitle="이름을 정하면 빈 슬라이드 한 장으로 공부방이 열립니다."
+      onClose={onClose}
+      footer={
+        <div className="modal-actions">
+          <button type="button" className="ghost-btn" onClick={onClose}>취소</button>
+          <button type="button" className="primary-btn" onClick={submit} data-testid="new-deck-create">만들기</button>
+        </div>
+      }
+    >
+      <label className="stack">
+        <span className="field-label">강의 이름</span>
+        <input
+          className="text-input"
+          value={title}
+          autoFocus
+          onChange={(event) => setTitle(event.target.value)}
+          onKeyDown={(event) => { if (event.key === 'Enter') submit(); }}
+          placeholder="예: 분산 시스템 3장"
+          aria-label="새 강의 이름"
+          data-testid="new-deck-name"
+        />
+      </label>
+      <p className="export-hint">첫 줄에 제목을 쓴 마크다운을 붙여넣거나, .md 파일을 가져와도 됩니다.</p>
+    </Modal>
+  );
+}
+
 interface MarkdownModalProps {
   splitMode: SplitMode;
   onSplitMode: (mode: SplitMode) => void;
