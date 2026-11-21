@@ -6,7 +6,7 @@ import { SlideStage } from './components/SlideStage';
 import { Notepad } from './components/Notepad';
 import { PresentMode } from './components/PresentMode';
 import { PrintSheet } from './components/PrintSheet';
-import { ExportMdModal, MarkdownModal } from './components/Modals';
+import { ExportMdModal, HelpModal, MarkdownModal } from './components/Modals';
 import { parseStudyFile } from './lib/study';
 import { downloadText, readTextFile, safeFilename } from './lib/files';
 import type { NoteExportMode } from './lib/study';
@@ -15,6 +15,7 @@ export default function App() {
   const studio = useStudio();
   const [openMd, setOpenMd] = useState(false);
   const [exportMd, setExportMd] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [present, setPresent] = useState(false);
   const [printing, setPrinting] = useState(false);
   const [railOpen, setRailOpen] = useState(false);
@@ -34,6 +35,11 @@ export default function App() {
       if (event.key === 'F5') {
         event.preventDefault();
         setPresent(true);
+      } else if (event.key === '?') {
+        const target = event.target as HTMLElement | null;
+        if (target?.closest?.('input, textarea, select, [contenteditable=""], [contenteditable="true"], [role="textbox"]')) return;
+        event.preventDefault();
+        setHelpOpen(true);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -84,6 +90,7 @@ export default function App() {
     <div className={`app${railOpen ? ' rail-open' : ''}`}>
       <Header
         studio={studio}
+        onOpenHelp={() => setHelpOpen(true)}
         onOpenMarkdown={() => setOpenMd(true)}
         onPresent={() => setPresent(true)}
         onPrint={() => setPrinting(true)}
@@ -107,6 +114,7 @@ export default function App() {
           onPresent={() => setPresent(true)}
           onToast={notify}
           onToggleRail={() => setRailOpen((value) => !value)}
+          keysEnabled={!present && !openMd && !exportMd && !helpOpen}
         />
 
         <Notepad studio={studio} onToast={notify} />
@@ -144,6 +152,8 @@ export default function App() {
       )}
 
       {exportMd && <ExportMdModal onClose={() => setExportMd(false)} onExport={downloadMarkdown} />}
+
+      {helpOpen && <HelpModal onClose={() => setHelpOpen(false)} />}
 
       {present && <PresentMode studio={studio} onClose={() => setPresent(false)} />}
 

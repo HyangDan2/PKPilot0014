@@ -107,6 +107,9 @@ export const IconSpark = (p: IconProps) => (
 export const IconMask = (p: IconProps) => (
   <Svg {...p}><rect x="3" y="6" width="18" height="6.5" rx="3.2" /><path d="M6 16.5c2 2.4 10 2.4 12 0" /></Svg>
 );
+export const IconHelp = (p: IconProps) => (
+  <Svg {...p}><circle cx="12" cy="12" r="8.6" /><path d="M9.5 9.2a2.6 2.6 0 0 1 5 .8c0 1.7-2.5 1.9-2.5 3.5" /><path d="M12 16.7h.01" /></Svg>
+);
 
 /** The HD2Lab dual-skew mark, drawn for the 56px title bar. */
 export const BrandMark = ({ size = 30 }: IconProps) => (

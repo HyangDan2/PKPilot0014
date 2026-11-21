@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import type { StudioApi } from '../store/studio';
 import {
-  BrandMark, IconCheck, IconDeck, IconDots, IconDownload, IconEdit, IconExternal, IconFile,
+  IconCheck, IconDeck, IconDots, IconDownload, IconEdit, IconExternal, IconFile, IconHelp,
   IconMoon, IconPresent, IconPrinter, IconSpark, IconSun, IconTrash, IconUpload,
 } from './Icons';
 
 interface Props {
   studio: StudioApi;
+  onOpenHelp: () => void;
   onOpenMarkdown: () => void;
   onPresent: () => void;
   onPrint: () => void;
@@ -18,7 +19,7 @@ interface Props {
 }
 
 export function Header({
-  studio, onOpenMarkdown, onPresent, onPrint, onExportStudy, onImportStudy,
+  studio, onOpenHelp, onOpenMarkdown, onPresent, onPrint, onExportStudy, onImportStudy,
   onExportMarkdown, onRestoreSample, onToast,
 }: Props) {
   const { decks, deck, settings, setSettings, selectDeck, createNewDeck, deleteDeck } = studio;
@@ -51,7 +52,7 @@ export function Header({
   return (
     <header className="topbar">
       <button type="button" className="brand" onClick={() => setDeckOpen((value) => !value)} title="덱 선택">
-        <span className="brand-mark" aria-hidden><BrandMark size={28} /></span>
+        <span className="brand-mark" aria-hidden><span className="mark" /></span>
         <span className="brand-name">HD2Lab</span>
         <span className="brand-div" aria-hidden />
         <span className="brand-app">Sága Glitra</span>
@@ -174,6 +175,15 @@ export function Header({
 
           {menuOpen && (
             <div className="popover menu-pop" role="menu" data-testid="nav-menu">
+              <button
+                type="button" role="menuitem" className="pop-item help-first"
+                onClick={run(onOpenHelp)} data-testid="menu-help"
+              >
+                <span className="pop-ic"><IconHelp size={14} /></span>
+                <span className="pop-text"><b>사용법</b><small>가이드 · 단축키 · 마크다운 문법</small></span>
+                <span className="pop-key">?</span>
+              </button>
+              <span className="pop-sep" />
               <p className="pop-head">EXPORT</p>
               <button type="button" role="menuitem" className="pop-item" onClick={run(onPrint)}>
                 <span className="pop-ic"><IconPrinter size={14} /></span>

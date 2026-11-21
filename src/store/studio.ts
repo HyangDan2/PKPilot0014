@@ -8,7 +8,9 @@ import {
   serializeStudy, uid,
 } from '../lib/study';
 import { deleteStrokes, getWorkspace, loadAllStrokes, setStrokes as saveStrokes, setWorkspace } from '../lib/db';
-import { createSampleDeck } from '../lib/sample';
+import {
+  SAMPLE_DECK_ID, SAMPLE_VERSION, createSampleDeck, sampleDeckSignature, upgradeSampleDecks,
+} from '../lib/sample';
 import type { SplitMode } from '../types/study';
 
 interface Persisted {
@@ -17,6 +19,10 @@ interface Persisted {
   activeDeckId: string;
   activeSlideId: string;
   settings: StudioSettings;
+  /** Which sample deck build the workspace last carried. */
+  sampleDeckVersion?: number;
+  /** Signature of the sample deck when it was last written. */
+  sampleDeckFingerprint?: string;
 }
 
 export interface StudioApi {
@@ -79,13 +85,22 @@ export function useStudio(): StudioApi {
         const stored = await getWorkspace<Persisted>();
         if (cancelled) return;
         if (stored?.decks?.length) {
-          setDecks(stored.decks);
-          setActiveDeckId(stored.activeDeckId || stored.decks[0].id);
-          setActiveSlideId(stored.activeSlideId || stored.decks[0].slides[0]?.id || '');
-          setSettingsState({ ...DEFAULT_SETTINGS, ...stored.settings });
           const ids = stored.decks.flatMap((deck) => deck.slides.map((slide) => slide.id));
           const ink = await loadAllStrokes(ids);
-          if (!cancelled && Object.keys(ink).length) setStrokes(ink as StrokesBySlide);
+          // An untouched sample deck follows the current build; anything the
+          // person edited (or drew on) is kept exactly as it is.
+          const upgraded = upgradeSampleDecks(stored.decks, {
+            version: stored.sampleDeckVersion,
+            fingerprint: stored.sampleDeckFingerprint,
+          }, ink as StrokesBySlide);
+          if (cancelled) return;
+          setDecks(upgraded.decks);
+          const activeDeck = upgraded.decks.find((item) => item.id === stored.activeDeckId) ?? upgraded.decks[0];
+          const keepSlide = activeDeck?.slides.some((item) => item.id === stored.activeSlideId);
+          setActiveDeckId(activeDeck.id);
+          setActiveSlideId(keepSlide ? stored.activeSlideId : activeDeck.slides[0]?.id ?? '');
+          setSettingsState({ ...DEFAULT_SETTINGS, ...stored.settings });
+          if (Object.keys(ink).length) setStrokes(ink as StrokesBySlide);
         } else {
           const sample = createSampleDeck();
           setDecks([sample]);
@@ -130,12 +145,15 @@ export function useStudio(): StudioApi {
   useEffect(() => {
     if (!hydrated.current || !ready || !deck) return;
     const timer = window.setTimeout(() => {
+      const sampleDeck = decks.find((item) => item.id === SAMPLE_DECK_ID);
       const payload: Persisted = {
         version: 1,
         decks,
         activeDeckId: deck.id,
         activeSlideId: slide?.id ?? '',
         settings,
+        sampleDeckVersion: SAMPLE_VERSION,
+        sampleDeckFingerprint: sampleDeck ? sampleDeckSignature(sampleDeck) : undefined,
       };
       void setWorkspace(payload);
     }, 350);
@@ -219,7 +237,9 @@ export function useStudio(): StudioApi {
 
   const restoreSample = useCallback(() => {
     const sample = createSampleDeck();
-    setDecks((prev) => [sample, ...prev]);
+    // One sample deck at a time: restore replaces the previous copy instead of
+    // stacking a second deck with the same id.
+    setDecks((prev) => [sample, ...prev.filter((item) => item.id !== sample.id)]);
     setActiveDeckId(sample.id);
     setActiveSlideId(sample.slides[0].id);
   }, []);

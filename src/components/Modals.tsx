@@ -37,6 +37,90 @@ export function Modal({ title, subtitle, onClose, children, footer, wide }: Moda
   );
 }
 
+interface HelpModalProps {
+  onClose: () => void;
+}
+
+/** `⋮ → 사용법`: the whole manual lives here, so no slide has to carry it. */
+export function HelpModal({ onClose }: HelpModalProps) {
+  return (
+    <Modal
+      title="Sága Glitra 사용법"
+      subtitle="가이드 · 단축키 · 마크다운 문법 — 필요한 항목만 골라 보세요."
+      onClose={onClose}
+      wide
+      footer={
+        <div className="modal-actions">
+          <button type="button" className="primary-btn" onClick={onClose} data-testid="help-close">알겠습니다</button>
+        </div>
+      }
+    >
+      <div className="help-grid" data-testid="help-modal">
+        <section className="help-card help-wide">
+          <h3>가이드</h3>
+          <ol className="help-list">
+            <li><b>.md 열기</b>로 마크다운 파일을 고르거나 붙여넣으면 <code>---</code> 기준으로 슬라이드가 나뉩니다.</li>
+            <li>왼쪽 목록에서 장을 고르면 가운데 슬라이드와 오른쪽 노트가 <b>함께</b> 넘어갑니다.</li>
+            <li>메모장은 슬라이드마다 1:1로 저장되고, 25:00 집중 타이머로 공부 시간을 나눕니다.</li>
+            <li>작업은 이 브라우저(IndexedDB)에 자동 저장됩니다. <code>⋮ → .study.json 백업</code>으로 통째로 내려받아 두세요.</li>
+          </ol>
+        </section>
+
+        <section className="help-card">
+          <h3>마크다운 문법</h3>
+          <ul className="help-list help-syntax">
+            <li><code># 제목</code> 첫 줄이 슬라이드 제목이 됩니다.</li>
+            <li><code>---</code> 수평선, 또는 <code>##</code> 헤딩으로 슬라이드를 나눕니다.</li>
+            <li><code>| 표 |</code> · <code>- [ ] 체크리스트</code> · <code>&gt; 인용</code></li>
+            <li><code>```ts</code> 코드펜스에는 언어 배지와 복사 버튼이 붙습니다.</li>
+            <li><code>&lt;!-- note: … --&gt;</code>는 슬라이드에 붙는 노트가 됩니다.</li>
+          </ul>
+        </section>
+
+        <section className="help-card">
+          <h3>가림막 · 필기</h3>
+          <ul className="help-list">
+            <li><code>==키워드==</code>는 가림막이 되어 눌러서 하나씩 열립니다.</li>
+            <li>상단 <b>가림막 전체</b> 토글로 한 번에 숨기거나 공개합니다.</li>
+            <li><b>필기</b>를 켜면 형광펜·펜으로 슬라이드 위에 바로 그립니다. 되돌리기와 획 지우기가 옆에 있습니다.</li>
+            <li>필기·편집 중에는 스와이프 넘김이 꺼져 그리기와 글자 선택을 방해하지 않습니다.</li>
+          </ul>
+        </section>
+
+        <section className="help-card">
+          <h3>수식 · 다이어그램</h3>
+          <ul className="help-list">
+            <li><code>$E=mc^2$</code> 인라인 수식, <code>$$ … $$</code> 블록 수식.</li>
+            <li><code>```mermaid</code> 블록은 flowchart·sequence 다이어그램으로 그려집니다.</li>
+            <li>수식과 다이어그램은 번들에 들어 있어 오프라인에서도 보입니다.</li>
+          </ul>
+        </section>
+
+        <section className="help-card">
+          <h3>단축키</h3>
+          <dl className="help-keys">
+            <div><dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>이전 / 다음 슬라이드</dd></div>
+            <div><dt><kbd>F5</kbd></dt><dd>발표 모드</dd></div>
+            <div><dt><kbd>?</kbd></dt><dd>이 사용법</dd></div>
+            <div><dt><kbd>Esc</kbd></dt><dd>모달 닫기 · 발표 종료</dd></div>
+            <div><dt><kbd>N</kbd></dt><dd>발표 모드에서 발표자 메모</dd></div>
+          </dl>
+        </section>
+
+        <section className="help-card help-wide">
+          <h3>모바일 메모 드로워</h3>
+          <ul className="help-list">
+            <li>화면 아래 슬림한 <b>📝 현재 슬라이드 메모 · N/M장 · ▲ 열기</b> 바를 누르면 메모 드로워가 위로 올라옵니다.</li>
+            <li>드로워 안에서 <b>현재 슬라이드 메모 · 덱 전체 요약 · 편집/미리보기 · 25:00 집중 타이머</b>를 모두 씁니다.</li>
+            <li>위쪽 바를 다시 누르거나 백드롭을 누르면 드로워가 접혀 슬라이드가 화면을 가득 채웁니다.</li>
+            <li>슬라이드 영역을 좌우로 밀어도 넘어갑니다.</li>
+          </ul>
+        </section>
+      </div>
+    </Modal>
+  );
+}
+
 interface MarkdownModalProps {
   splitMode: SplitMode;
   onSplitMode: (mode: SplitMode) => void;

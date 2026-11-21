@@ -1,13 +1,15 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, type PointerEvent as ReactPointerEvent } from 'react';
 import type { StudioApi } from '../store/studio';
 import type { InkPoint } from '../types/study';
 import { INK_COLORS, STATUS_LABEL } from '../types/study';
 import { maskCount } from '../lib/mask';
+import { resolveSwipe } from '../lib/gesture';
 import { stripDuplicateTitle } from '../lib/split';
 import { RenderedMarkdown } from './RenderedMarkdown';
 import { InkLayer } from './InkLayer';
 import {
-  IconEdit, IconEye, IconEyeOff, IconHighlighter, IconList, IconPen, IconPresent, IconSplit, IconUndo, IconTrash,
+  IconEdit, IconEye, IconEyeOff, IconHighlighter, IconLeft, IconList, IconPen, IconPresent, IconRight,
+  IconSplit, IconUndo, IconTrash,
 } from './Icons';
 
 interface Props {
@@ -15,9 +17,14 @@ interface Props {
   onPresent: () => void;
   onToast: (message: string) => void;
   onToggleRail: () => void;
+  /** False while a modal or present mode owns the keyboard. */
+  keysEnabled?: boolean;
 }
 
-export function SlideStage({ studio, onPresent, onToast, onToggleRail }: Props) {
+/** Controls that own a drag/click of their own; a swipe must not start on them. */
+const SWIPE_BLOCKERS = 'button, a, input, textarea, select, [contenteditable], [role="textbox"], .glitra-mask, .code-block, .mermaid-block';
+
+export function SlideStage({ studio, onPresent, onToast, onToggleRail, keysEnabled = true }: Props) {
   const { deck, slide, settings, setSettings, updateSlide, toggleStatus, addStroke, undoStroke } = studio;
   const index = deck.slides.findIndex((item) => item.id === slide.id);
   const masks = useMemo(() => maskCount(slide.markdown), [slide.markdown]);
@@ -25,13 +32,56 @@ export function SlideStage({ studio, onPresent, onToast, onToggleRail }: Props) 
     () => stripDuplicateTitle(slide.markdown, slide.title),
     [slide.markdown, slide.title],
   );
+  const dragStart = useRef<{ x: number; y: number; pointerId: number } | null>(null);
 
   const setView = (viewMode: 'view' | 'edit' | 'split') => setSettings({ viewMode });
+
+  const go = (delta: number) => {
+    if (delta < 0 && index <= 0) return;
+    if (delta > 0 && index >= deck.slides.length - 1) return;
+    studio.goSlide(delta);
+  };
+
+  // ← / → walk the deck while the caret is not in a field. Present mode and
+  // open modals handle their own keys, so `keysEnabled` turns this off.
+  useEffect(() => {
+    if (!keysEnabled) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest?.('input, textarea, select, [contenteditable=""], [contenteditable="true"], [role="textbox"]')) return;
+      event.preventDefault();
+      studio.goSlide(event.key === 'ArrowRight' ? 1 : -1);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [keysEnabled, studio]);
 
   const togglePen = () => {
     const next = !settings.penOn;
     setSettings({ penOn: next });
     onToast(next ? '필기 모드 — 슬라이드 위에 바로 그으세요' : '필기 모드 꺼짐');
+  };
+
+  const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    const target = event.target as HTMLElement | null;
+    if (target?.closest?.(SWIPE_BLOCKERS)) { dragStart.current = null; return; }
+    dragStart.current = { x: event.clientX, y: event.clientY, pointerId: event.pointerId };
+  };
+
+  const onPointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const start = dragStart.current;
+    dragStart.current = null;
+    if (!start || start.pointerId !== event.pointerId) return;
+    const direction = resolveSwipe({
+      dx: event.clientX - start.x,
+      dy: event.clientY - start.y,
+      penOn: settings.penOn,
+      viewMode: settings.viewMode,
+    });
+    if (direction !== 0) go(direction);
   };
 
   return (
@@ -139,95 +189,117 @@ export function SlideStage({ studio, onPresent, onToast, onToggleRail }: Props) 
         </div>
       </div>
 
-      <div className="stage-scroll">
-        <div className={`slide-card ${settings.viewMode}`} data-testid="slide-card">
-          <header className="slide-head">
-            <span className="slide-no">{String(index + 1).padStart(2, '0')}</span>
-            <h2 className="slide-title">{slide.title || '제목 없는 슬라이드'}</h2>
-            <button
-              type="button"
-              className={`status-pill ${slide.status}`}
-              onClick={() => toggleStatus()}
-              title="눌러서 학습 상태 바꾸기"
-            >
-              {STATUS_LABEL[slide.status]}
-            </button>
-          </header>
+      <div className="stage-scroll" onPointerDown={onPointerDown} onPointerUp={onPointerUp} onPointerCancel={() => { dragStart.current = null; }}>
+        <div className="stage-frame">
+          <div className={`slide-card ${settings.viewMode}`} data-testid="slide-card">
+            <header className="slide-head">
+              <span className="slide-no">{String(index + 1).padStart(2, '0')}</span>
+              <h2 className="slide-title">{slide.title || '제목 없는 슬라이드'}</h2>
+              <button
+                type="button"
+                className={`status-pill ${slide.status}`}
+                onClick={() => toggleStatus()}
+                title="눌러서 학습 상태 바꾸기"
+              >
+                {STATUS_LABEL[slide.status]}
+              </button>
+            </header>
 
-          {settings.viewMode === 'view' && (
-            <div className="slide-body">
-              <RenderedMarkdown
-                markdown={bodyMarkdown}
-                maskAll={settings.maskAll}
-                theme={settings.theme}
-                className="slide-md"
-                onCopy={() => onToast('코드를 복사했습니다')}
-              />
-            </div>
-          )}
-
-          {settings.viewMode === 'edit' && (
-            <div className="slide-editor">
-              <input
-                className="slide-title-input"
-                value={slide.title}
-                onChange={(event) => updateSlide({ title: event.target.value })}
-                aria-label="슬라이드 제목"
-                placeholder="슬라이드 제목"
-              />
-              <textarea
-                className="md-input"
-                value={slide.markdown}
-                onChange={(event) => updateSlide({ markdown: event.target.value })}
-                spellCheck={false}
-                aria-label="슬라이드 마크다운"
-                placeholder={'## 제목\n\n마크다운으로 적으세요. ==가림막==, $수식$, ```mermaid 도 됩니다.'}
-              />
-            </div>
-          )}
-
-          {settings.viewMode === 'split' && (
-            <div className="slide-split">
-              <div className="slide-editor">
-                <textarea
-                  className="md-input"
-                  value={slide.markdown}
-                  onChange={(event) => updateSlide({ markdown: event.target.value })}
-                  spellCheck={false}
-                  aria-label="슬라이드 마크다운 (분할 편집)"
-                />
-              </div>
-              <div className="slide-body preview">
+            {settings.viewMode === 'view' && (
+              <div className="slide-body">
                 <RenderedMarkdown
                   markdown={bodyMarkdown}
                   maskAll={settings.maskAll}
                   theme={settings.theme}
                   className="slide-md"
+                  onCopy={() => onToast('코드를 복사했습니다')}
                 />
               </div>
-            </div>
-          )}
+            )}
 
-          {settings.viewMode === 'view' && (
-            <InkLayer
-              strokes={studio.slideStrokes}
-              enabled={settings.penOn}
-              tool={settings.tool}
-              color={settings.color}
-              onCommit={(stroke) => {
-                const ink: InkPoint[] = stroke.points;
-                if (ink.length) addStroke(stroke);
-              }}
-            />
-          )}
+            {settings.viewMode === 'edit' && (
+              <div className="slide-editor">
+                <input
+                  className="slide-title-input"
+                  value={slide.title}
+                  onChange={(event) => updateSlide({ title: event.target.value })}
+                  aria-label="슬라이드 제목"
+                  placeholder="슬라이드 제목"
+                />
+                <textarea
+                  className="md-input"
+                  value={slide.markdown}
+                  onChange={(event) => updateSlide({ markdown: event.target.value })}
+                  spellCheck={false}
+                  aria-label="슬라이드 마크다운"
+                  placeholder={'## 제목\n\n마크다운으로 적으세요. ==가림막==, $수식$, ```mermaid 도 됩니다.'}
+                />
+              </div>
+            )}
 
-          <footer className="slide-foot">
-            <span className="foot-deck">{deck.title}</span>
-            <span className="foot-meta">
-              {deck.slides.length}장 · {settings.maskAll ? '가림막 공개' : '가림막 숨김'}
-              {settings.penOn ? ' · 필기 ON' : ''}
+            {settings.viewMode === 'split' && (
+              <div className="slide-split">
+                <div className="slide-editor">
+                  <textarea
+                    className="md-input"
+                    value={slide.markdown}
+                    onChange={(event) => updateSlide({ markdown: event.target.value })}
+                    spellCheck={false}
+                    aria-label="슬라이드 마크다운 (분할 편집)"
+                  />
+                </div>
+                <div className="slide-body preview">
+                  <RenderedMarkdown
+                    markdown={bodyMarkdown}
+                    maskAll={settings.maskAll}
+                    theme={settings.theme}
+                    className="slide-md"
+                  />
+                </div>
+              </div>
+            )}
+
+            {settings.viewMode === 'view' && (
+              <InkLayer
+                strokes={studio.slideStrokes}
+                enabled={settings.penOn}
+                tool={settings.tool}
+                color={settings.color}
+                onCommit={(stroke) => {
+                  const ink: InkPoint[] = stroke.points;
+                  if (ink.length) addStroke(stroke);
+                }}
+              />
+            )}
+
+            <footer className="slide-foot">
+              <span className="foot-deck">{deck.title}</span>
+              <span className="foot-meta">
+                {deck.slides.length}장 · {settings.maskAll ? '가림막 공개' : '가림막 숨김'}
+                {settings.penOn ? ' · 필기 ON' : ''}
+              </span>
+            </footer>
+          </div>
+
+          <nav className="stage-nav" aria-label="슬라이드 넘김" data-testid="stage-nav">
+            <button
+              type="button" className="stage-nav-btn"
+              onClick={() => go(-1)} disabled={index <= 0}
+              aria-label="이전 슬라이드" data-testid="stage-prev"
+            >
+              <IconLeft size={16} />
+            </button>
+            <span className="stage-nav-count" data-testid="stage-count" aria-live="polite">
+              <b>{index + 1}</b><span className="stage-nav-of">/</span>{deck.slides.length}
             </span>
-          </footer>
+            <button
+              type="button" className="stage-nav-btn"
+              onClick={() => go(1)} disabled={index >= deck.slides.length - 1}
+              aria-label="다음 슬라이드" data-testid="stage-next"
+            >
+              <IconRight size={16} />
+            </button>
+          </nav>
         </div>
       </div>
     </section>
