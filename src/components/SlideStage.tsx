@@ -95,6 +95,7 @@ export function SlideStage({ studio, onPresent, onToast, onToggleRail, keysEnabl
             type="button" role="tab" aria-selected={settings.viewMode === 'view'}
             className={settings.viewMode === 'view' ? 'on' : ''}
             onClick={() => setView('view')}
+            aria-label="보기" title="보기 모드"
           >
             <IconEye size={15} /><span>보기</span>
           </button>
@@ -102,6 +103,7 @@ export function SlideStage({ studio, onPresent, onToast, onToggleRail, keysEnabl
             type="button" role="tab" aria-selected={settings.viewMode === 'edit'}
             className={settings.viewMode === 'edit' ? 'on' : ''}
             onClick={() => setView('edit')}
+            aria-label="편집" title="편집 모드"
           >
             <IconEdit size={15} /><span>편집</span>
           </button>
@@ -109,6 +111,7 @@ export function SlideStage({ studio, onPresent, onToast, onToggleRail, keysEnabl
             type="button" role="tab" aria-selected={settings.viewMode === 'split'}
             className={`split-only${settings.viewMode === 'split' ? ' on' : ''}`}
             onClick={() => setView('split')}
+            aria-label="분할" title="분할 보기"
           >
             <IconSplit size={15} /><span>분할</span>
           </button>
@@ -120,6 +123,7 @@ export function SlideStage({ studio, onPresent, onToast, onToggleRail, keysEnabl
             className={`tool-btn${settings.maskAll ? '' : ' on'}`}
             onClick={() => setSettings({ maskAll: !settings.maskAll })}
             title="가림막 전체 숨김 / 공개"
+            aria-label={settings.maskAll ? '가림막 전체 공개' : '가림막 전체 숨김'}
             aria-pressed={!settings.maskAll}
             data-testid="mask-all"
           >
@@ -135,6 +139,7 @@ export function SlideStage({ studio, onPresent, onToast, onToggleRail, keysEnabl
               onClick={togglePen}
               aria-pressed={settings.penOn}
               title="형광펜 / 펜 켜기"
+              aria-label={settings.penOn ? '필기 끄기' : '필기 켜기'}
               data-testid="pen-toggle"
             >
               <IconHighlighter size={15} /><span>필기</span>
@@ -183,7 +188,7 @@ export function SlideStage({ studio, onPresent, onToast, onToggleRail, keysEnabl
             )}
           </div>
 
-          <button type="button" className="tool-btn present-btn" onClick={onPresent} data-testid="present-button">
+          <button type="button" className="tool-btn present-btn" onClick={onPresent} title="발표 모드 (F5)" aria-label="발표 모드" data-testid="present-button">
             <IconPresent size={15} /><span>발표 모드</span><kbd>F5</kbd>
           </button>
         </div>

@@ -19,6 +19,7 @@ export function Notepad({ studio, onToast }: Props) {
   // A note that already has words opens as reading text; an empty one opens as
   // the editor, so the first tap after landing can start typing.
   const editing = !value.trim() || mode === 'edit';
+  const empty = !value.trim();
   const position = deck.slides.findIndex((item) => item.id === slide.id) + 1;
 
   const write = (text: string) => {
@@ -37,7 +38,12 @@ export function Notepad({ studio, onToast }: Props) {
         data-testid="note-drawer-toggle"
       >
         <span className="drawer-grip" aria-hidden />
-        <span className="drawer-label"><span aria-hidden>📝</span> 현재 슬라이드 메모</span>
+        <span className="drawer-label">
+          <span aria-hidden>📝</span>
+          {empty
+            ? <em className="drawer-hint" data-testid="note-drawer-hint">여기에 메모하세요</em>
+            : (deckTab ? '덱 전체 요약' : '현재 슬라이드 메모')}
+        </span>
         <span className="drawer-count">{position}/{deck.slides.length}장</span>
         <span className="drawer-cue">{drawerOpen ? '▼ 닫기' : '▲ 열기'}</span>
       </button>
@@ -98,8 +104,8 @@ export function Notepad({ studio, onToast }: Props) {
               spellCheck={false}
               placeholder={
                 deckTab
-                  ? '덱 전체를 한 장으로 정리해 보세요. ==가림막==, - [ ] 체크리스트, $수식$ 모두 됩니다.'
-                  : '이 슬라이드에만 붙는 노트입니다. 슬라이드를 넘기면 노트도 함께 전환됩니다.'
+                  ? '덱 전체 요약을 여기에 메모하세요'
+                  : '여기에 메모하세요'
               }
               aria-label={deckTab ? '덱 전체 요약 노트' : '현재 슬라이드 메모'}
               data-testid="note-input"

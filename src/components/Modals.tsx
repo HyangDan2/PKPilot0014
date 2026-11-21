@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { splitMarkdown } from '../lib/split';
-import type { NoteExportMode } from '../lib/study';
 import type { SplitMode } from '../types/study';
+import type { ExportKind } from '../lib/exportBundle';
+import { exportFilename } from '../lib/exportBundle';
 import { IconClose, IconFile, IconUpload } from './Icons';
 
 interface ModalProps {
@@ -62,7 +63,7 @@ export function HelpModal({ onClose }: HelpModalProps) {
             <li><b>.md 열기</b>로 마크다운 파일을 고르거나 붙여넣으면 <code>---</code> 기준으로 슬라이드가 나뉩니다.</li>
             <li>왼쪽 목록에서 장을 고르면 가운데 슬라이드와 오른쪽 노트가 <b>함께</b> 넘어갑니다.</li>
             <li>메모장은 슬라이드마다 1:1로 저장되고, 25:00 집중 타이머로 공부 시간을 나눕니다.</li>
-            <li>작업은 이 브라우저(IndexedDB)에 자동 저장됩니다. <code>⋮ → .study.json 백업</code>으로 통째로 내려받아 두세요.</li>
+            <li>작업은 이 브라우저(IndexedDB)에 자동 저장됩니다. <code>⋮ → 내보내기</code>에서 .md · ZIP 번들 · 전체 백업을 받아 두세요.</li>
           </ol>
         </section>
 
@@ -108,10 +109,20 @@ export function HelpModal({ onClose }: HelpModalProps) {
         </section>
 
         <section className="help-card help-wide">
+          <h3>내보내기</h3>
+          <ul className="help-list">
+            <li><b>내보내기</b> 한 곳에서 <b>슬라이드만</b> · <b>메모만</b> · <b>슬라이드 + 메모 합본</b> · <b>ZIP 번들</b> · <b>전체 백업</b>을 고릅니다.</li>
+            <li><b>ZIP 번들</b>에는 슬라이드 .md · 메모 .md · .study.json 백업이 각각 따로 들어 있습니다.</li>
+            <li><b>전체 백업(.study.json)</b>은 덱 · 슬라이드 · 메모 · 필기 · 학습 상태를 모두 담고, <code>⋮ → .study.json 복원</code>으로 100% 되돌립니다.</li>
+          </ul>
+        </section>
+
+        <section className="help-card help-wide">
           <h3>모바일 메모 드로워</h3>
           <ul className="help-list">
             <li>화면 아래 슬림한 <b>📝 현재 슬라이드 메모 · N/M장 · ▲ 열기</b> 바를 누르면 메모 드로워가 위로 올라옵니다.</li>
             <li>드로워 안에서 <b>현재 슬라이드 메모 · 덱 전체 요약 · 편집/미리보기 · 25:00 집중 타이머</b>를 모두 씁니다.</li>
+            <li>메모가 비어 있으면 아래 바에 흐린 글씨로 <b>여기에 메모하세요</b>가 바로 보입니다.</li>
             <li>위쪽 바를 다시 누르거나 백드롭을 누르면 드로워가 접혀 슬라이드가 화면을 가득 채웁니다.</li>
             <li>슬라이드 영역을 좌우로 밀어도 넘어갑니다.</li>
           </ul>
@@ -258,47 +269,108 @@ export function MarkdownModal({ splitMode, onSplitMode, onClose, onImport }: Mar
   );
 }
 
-interface ExportMdModalProps {
+interface ExportModalProps {
+  /** Deck title stem, already filename-safe. */
+  baseName: string;
+  slideCount: number;
+  noteCount: number;
+  inkCount: number;
   onClose: () => void;
-  onExport: (mode: NoteExportMode) => void;
+  onExport: (kind: ExportKind, noteMode: 'comment' | 'quote') => void;
 }
 
-export function ExportMdModal({ onClose, onExport }: ExportMdModalProps) {
-  const [mode, setMode] = useState<NoteExportMode>('comment');
-  const options: { value: NoteExportMode; title: string; hint: string; sample: string }[] = [
-    { value: 'comment', title: 'HTML 주석으로', hint: '다시 가져올 때 노트가 그대로 복원됩니다', sample: '<!-- note: … -->' },
-    { value: 'quote', title: '인용 블록으로', hint: '일반 마크다운 뷰어에서 읽기 좋습니다', sample: '> **노트** …' },
-    { value: 'none', title: '노트 빼고', hint: '슬라이드 본문만 내보냅니다', sample: '—' },
+/**
+ * One export sheet for every way out of the study room: slides, notes, the
+ * combined deck (still re-importable), a ZIP bundle, or the full backup.
+ */
+export function ExportModal({ baseName, slideCount, noteCount, inkCount, onClose, onExport }: ExportModalProps) {
+  const [kind, setKind] = useState<ExportKind>('combined');
+  const [noteMode, setNoteMode] = useState<'comment' | 'quote'>('comment');
+  const options: { value: ExportKind; title: string; hint: string; badge: string }[] = [
+    {
+      value: 'slides', title: '슬라이드만', badge: '.md',
+      hint: `슬라이드 ${slideCount}장 본문만 — 메모는 넣지 않습니다`,
+    },
+    {
+      value: 'notes', title: '메모만', badge: '.md',
+      hint: `슬라이드별 메모 ${noteCount}개와 덱 요약을 한 파일로`,
+    },
+    {
+      value: 'combined', title: '슬라이드 + 메모 합본', badge: '.md',
+      hint: '---로 나뉜 덱 하나 — 다시 가져오면 메모까지 복원됩니다',
+    },
+    {
+      value: 'zip', title: 'ZIP 번들', badge: '.zip',
+      hint: '슬라이드 · 메모 · 전체 백업을 각각의 파일로 묶어서',
+    },
+    {
+      value: 'study', title: '전체 백업', badge: '.study.json',
+      hint: `슬라이드 ${slideCount}장 · 메모 ${noteCount}개 · 학습 상태 · ${inkCount ? `필기 ${inkCount}획` : '필기'}`,
+    },
   ];
+  const filename = exportFilename(baseName, kind);
+  const confirmLabel = kind === 'zip' ? 'ZIP 내려받기' : kind === 'study' ? '백업 내려받기' : '.md 내려받기';
 
   return (
     <Modal
-      title="마크다운으로 내보내기"
-      subtitle="슬라이드는 `---`로 나뉘고, 파일 맨 앞에 frontmatter가 붙습니다."
+      title="내보내기"
+      subtitle="무엇을 내려받을지 고르세요. 파일은 이 브라우저에서 바로 만들어집니다."
       onClose={onClose}
       footer={
-        <div className="modal-actions">
-          <button type="button" className="ghost-btn" onClick={onClose}>취소</button>
-          <button type="button" className="primary-btn" onClick={() => onExport(mode)} data-testid="export-md-confirm">.md 내려받기</button>
-        </div>
+        <>
+          <span className="file-target" data-testid="export-filename"><IconFile size={13} />{filename}</span>
+          <div className="modal-actions">
+            <button type="button" className="ghost-btn" onClick={onClose}>취소</button>
+            <button
+              type="button" className="primary-btn"
+              onClick={() => onExport(kind, noteMode)}
+              data-testid="export-confirm"
+            >
+              {confirmLabel}
+            </button>
+          </div>
+        </>
       }
     >
-      <div className="option-list" role="radiogroup" aria-label="노트 내보내기 방식">
+      <div className="option-list" role="radiogroup" aria-label="내보내기 형식" data-testid="export-modal">
         {options.map((option) => (
           <button
             key={option.value}
             type="button"
             role="radio"
-            aria-checked={mode === option.value}
-            className={`option-row${mode === option.value ? ' on' : ''}`}
-            onClick={() => setMode(option.value)}
+            aria-checked={kind === option.value}
+            className={`option-row${kind === option.value ? ' on' : ''}`}
+            onClick={() => setKind(option.value)}
+            data-testid={`export-option-${option.value}`}
           >
             <span className="option-dot" aria-hidden />
             <span className="option-text"><b>{option.title}</b><small>{option.hint}</small></span>
-            <code>{option.sample}</code>
+            <code>{option.badge}</code>
           </button>
         ))}
       </div>
+
+      {kind === 'combined' && (
+        <div className="split-pick" role="group" aria-label="메모를 담는 방식" data-testid="export-note-mode">
+          <span>노트 형식</span>
+          <button type="button" className={noteMode === 'comment' ? 'on' : ''} onClick={() => setNoteMode('comment')}>
+            HTML 주석 <code>&lt;!-- note --&gt;</code>
+          </button>
+          <button type="button" className={noteMode === 'quote' ? 'on' : ''} onClick={() => setNoteMode('quote')}>
+            인용 블록 <code>&gt; 노트</code>
+          </button>
+        </div>
+      )}
+
+      <p className="export-hint">
+        {kind === 'zip'
+          ? 'ZIP 안에는 슬라이드 .md · 메모 .md · .study.json 백업이 각각 들어 있어, 필요한 파일만 꺼내 쓸 수 있습니다.'
+          : kind === 'study'
+            ? '전체 백업은 ⋮ → .study.json 복원으로 언제든 100% 되돌릴 수 있습니다.'
+            : kind === 'notes'
+              ? '메모만 모은 파일은 슬라이드 번호와 제목으로 묶여 있어 시험 전 복습용으로 읽기 좋습니다.'
+              : '파일 맨 앞에 frontmatter가 붙고, 슬라이드는 ---로 나뉩니다.'}
+      </p>
     </Modal>
   );
 }

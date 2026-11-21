@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { StudioApi } from '../store/studio';
 import {
-  IconCheck, IconDeck, IconDots, IconDownload, IconEdit, IconExternal, IconFile, IconHelp,
+  IconCheck, IconDeck, IconDots, IconDownload, IconEdit, IconExternal, IconHelp,
   IconMoon, IconPresent, IconPrinter, IconSpark, IconSun, IconTrash, IconUpload,
 } from './Icons';
 
@@ -11,16 +11,15 @@ interface Props {
   onOpenMarkdown: () => void;
   onPresent: () => void;
   onPrint: () => void;
-  onExportStudy: () => void;
+  onOpenExport: () => void;
   onImportStudy: () => void;
-  onExportMarkdown: () => void;
   onRestoreSample: () => void;
   onToast: (message: string) => void;
 }
 
 export function Header({
-  studio, onOpenHelp, onOpenMarkdown, onPresent, onPrint, onExportStudy, onImportStudy,
-  onExportMarkdown, onRestoreSample, onToast,
+  studio, onOpenHelp, onOpenMarkdown, onPresent, onPrint, onOpenExport, onImportStudy,
+  onRestoreSample, onToast,
 }: Props) {
   const { decks, deck, settings, setSettings, selectDeck, createNewDeck, deleteDeck } = studio;
   const [deckOpen, setDeckOpen] = useState(false);
@@ -132,11 +131,17 @@ export function Header({
           )}
         </div>
 
-        <button type="button" className="top-btn" onClick={onOpenMarkdown} title=".md 파일 열기 / 붙여넣기" data-testid="header-open-md">
-          <IconUpload size={15} /><span>.md 열기</span>
+        <button
+          type="button" className="top-btn" onClick={onOpenMarkdown}
+          title=".md 파일 열기 / 붙여넣기" aria-label="가져오기 — .md 파일 열기" data-testid="header-open-md"
+        >
+          <IconUpload size={15} /><span>가져오기</span>
         </button>
 
-        <button type="button" className="top-btn present-top" onClick={onPresent} title="발표 모드 (F5)" data-testid="header-present">
+        <button
+          type="button" className="top-btn present-top" onClick={onPresent}
+          title="발표 모드 (F5)" aria-label="발표 모드" data-testid="header-present"
+        >
           <IconPresent size={15} /><span>발표 모드</span><kbd>F5</kbd>
         </button>
 
@@ -190,20 +195,15 @@ export function Header({
                 <span className="pop-text"><b>학습지 PDF 인쇄</b><small>슬라이드 + 슬라이드 메모</small></span>
                 <span className="pop-key">PRINT</span>
               </button>
-              <button type="button" role="menuitem" className="pop-item" onClick={run(onExportStudy)}>
+              <button type="button" role="menuitem" className="pop-item" onClick={run(onOpenExport)} data-testid="menu-export">
                 <span className="pop-ic"><IconDownload size={14} /></span>
-                <span className="pop-text"><b>.study.json 백업</b><small>덱 · 노트 · 필기 전체</small></span>
-                <span className="pop-key">JSON</span>
+                <span className="pop-text"><b>내보내기</b><small>슬라이드 · 메모 · ZIP 번들 · 전체 백업</small></span>
+                <span className="pop-key">EXPORT</span>
               </button>
-              <button type="button" role="menuitem" className="pop-item" onClick={run(onImportStudy)}>
+              <button type="button" role="menuitem" className="pop-item" onClick={run(onImportStudy)} data-testid="menu-restore">
                 <span className="pop-ic"><IconUpload size={14} /></span>
                 <span className="pop-text"><b>.study.json 복원</b><small>백업 파일을 통째로 되돌리기</small></span>
                 <span className="pop-key">RESTORE</span>
-              </button>
-              <button type="button" role="menuitem" className="pop-item" onClick={run(onExportMarkdown)}>
-                <span className="pop-ic"><IconFile size={14} /></span>
-                <span className="pop-text"><b>.md 내보내기</b><small>--- 구분 + &lt;!-- note --&gt;</small></span>
-                <span className="pop-key">MD</span>
               </button>
 
               <span className="pop-sep" />

@@ -12,9 +12,11 @@
 | [DOMPurify](https://github.com/cure53/DOMPurify) | Apache-2.0 / MPL-2.0 | 렌더링 결과 새니타이즈 |
 | [Mermaid](https://mermaid.js.org) | MIT | ```mermaid 다이어그램 (자체 호스팅 지연 로드) |
 | [lz-string](https://github.com/pieroxy/lz-string) | MIT | 공유 문자열 압축 호환 |
+| [fflate](https://github.com/101arrowz/fflate) | MIT | ZIP 번들 내보내기 (브라우저 내 생성) |
 | [React](https://react.dev) / React DOM | MIT | UI |
 | [Vite](https://vitejs.dev) | MIT | 빌드 (개발 의존성) |
 | [Vitest](https://vitest.dev) · happy-dom | MIT | 단위 테스트 (개발 의존성) |
+| [Playwright](https://playwright.dev) | Apache-2.0 | E2E 테스트 (개발 의존성) |
 
 ## HD2Lab 자체 자산
 
