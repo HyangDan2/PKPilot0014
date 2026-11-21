@@ -2,7 +2,8 @@ import type {
   Deck, SplitMode, StudyFile, Stroke, StudyStatus, StrokesBySlide, Slide,
 } from '../types/study';
 import { STATUS_ORDER } from '../types/study';
-import { deckTitleFrom, splitMarkdown } from './split';
+import { extractTags, deckTitleFrom, splitMarkdown } from './split';
+import { normalizeTags } from './tags';
 
 export function uid(prefix = 'id'): string {
   const rand =
@@ -30,13 +31,14 @@ function firstTitle(markdown: string): string {
   return line.replace(/^#{1,6}\s*/, '').replace(/[*_`~]/g, '').trim().slice(0, 80) || '새 슬라이드';
 }
 
-export function createDeck(title: string, slides: Slide[] = []): Deck {
+export function createDeck(title: string, slides: Slide[] = [], tags: string[] = []): Deck {
   const now = Date.now();
   return {
     id: uid('deck'),
     title: title || '새 덱',
     slides: slides.length ? slides : [createSlide('# 새 슬라이드\n\n여기에 학습 내용을 적어 보세요.')],
     summary: '',
+    tags: normalizeTags(tags),
     createdAt: now,
     updatedAt: now,
   };
@@ -65,7 +67,9 @@ export function serializeStudy(input: {
     app: 'Sága Glitra',
     exportedAt: new Date().toISOString(),
     activeDeckId: input.activeDeckId,
-    decks: input.decks,
+    // Older decks carry no `tags`; every save writes the field so the file
+    // itself documents the deck model.
+    decks: input.decks.map((deck) => ({ ...deck, tags: normalizeTags(deck.tags) })),
     strokes: input.strokes,
   };
   return `${JSON.stringify(file, null, 2)}\n`;
@@ -93,6 +97,7 @@ function normalizeDeck(raw: any): Deck {
     title: typeof raw?.title === 'string' && raw.title ? raw.title : '가져온 덱',
     slides: slides.length ? slides : [createSlide('# 새 슬라이드\n\n여기에 학습 내용을 적어 보세요.')],
     summary: typeof raw?.summary === 'string' ? raw.summary : '',
+    tags: normalizeTags(raw?.tags),
     createdAt: typeof raw?.createdAt === 'number' ? raw.createdAt : now,
     updatedAt: typeof raw?.updatedAt === 'number' ? raw.updatedAt : now,
   };
@@ -156,9 +161,11 @@ export type NoteExportMode = 'comment' | 'quote' | 'none';
 
 /** The deck as one `.md` file: `---` between slides, notes as comments. */
 export function deckToMarkdown(deck: Deck, noteMode: NoteExportMode = 'comment'): string {
+  const tags = normalizeTags(deck.tags);
   const head = [
     '---',
     `title: ${deck.title.replace(/"/g, "'")}`,
+    ...(tags.length ? [`tags: [${tags.join(', ')}]`] : []),
     `slides: ${deck.slides.length}`,
     `exported: ${new Date().toISOString()}`,
     '---',
@@ -184,6 +191,8 @@ export function deckToMarkdown(deck: Deck, noteMode: NoteExportMode = 'comment')
 
 export interface ImportResult {
   title: string;
+  /** Deck tags: the frontmatter `tags:` field, else `#해시태그` up top. */
+  tags: string[];
   slides: { markdown: string; note: string; title: string }[];
 }
 
@@ -191,5 +200,5 @@ export function importMarkdown(text: string, mode: SplitMode, filename = ''): Im
   const chunks = splitMarkdown(text, mode);
   if (chunks.length === 0) throw new Error('마크다운에서 슬라이드를 찾지 못했습니다.');
   const fallback = filename.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ') || '가져온 덱';
-  return { title: deckTitleFrom(text, fallback), slides: chunks };
+  return { title: deckTitleFrom(text, fallback), tags: extractTags(text), slides: chunks };
 }

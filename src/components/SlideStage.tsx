@@ -7,9 +7,10 @@ import { resolveSwipe } from '../lib/gesture';
 import { stripDuplicateTitle } from '../lib/split';
 import { RenderedMarkdown } from './RenderedMarkdown';
 import { InkLayer } from './InkLayer';
+import { DeckSwitch } from './DeckSwitch';
 import {
-  IconEdit, IconEye, IconEyeOff, IconHighlighter, IconLeft, IconList, IconPen, IconPresent, IconRight,
-  IconSplit, IconUndo, IconTrash,
+  IconBookOpen, IconEdit, IconEye, IconEyeOff, IconHighlighter, IconLeft, IconList, IconPen, IconPresent,
+  IconRight, IconSplit, IconUndo, IconTrash,
 } from './Icons';
 
 interface Props {
@@ -17,6 +18,7 @@ interface Props {
   onPresent: () => void;
   onToast: (message: string) => void;
   onToggleRail: () => void;
+  onRestoreSample: () => void;
   /** False while a modal or present mode owns the keyboard. */
   keysEnabled?: boolean;
 }
@@ -24,7 +26,7 @@ interface Props {
 /** Controls that own a drag/click of their own; a swipe must not start on them. */
 const SWIPE_BLOCKERS = 'button, a, input, textarea, select, [contenteditable], [role="textbox"], .glitra-mask, .code-block, .mermaid-block';
 
-export function SlideStage({ studio, onPresent, onToast, onToggleRail, keysEnabled = true }: Props) {
+export function SlideStage({ studio, onPresent, onToast, onToggleRail, onRestoreSample, keysEnabled = true }: Props) {
   const { deck, slide, settings, setSettings, updateSlide, toggleStatus, addStroke, undoStroke } = studio;
   const index = deck.slides.findIndex((item) => item.id === slide.id);
   const masks = useMemo(() => maskCount(slide.markdown), [slide.markdown]);
@@ -90,6 +92,9 @@ export function SlideStage({ studio, onPresent, onToast, onToggleRail, keysEnabl
         <button type="button" className="icon-btn rail-toggle" onClick={onToggleRail} aria-label="슬라이드 목록" title="슬라이드 목록">
           <IconList size={16} />
         </button>
+
+        <DeckSwitch studio={studio} onRestoreSample={onRestoreSample} onToast={onToast} />
+
         <div className="seg" role="tablist" aria-label="보기 모드">
           <button
             type="button" role="tab" aria-selected={settings.viewMode === 'view'}
@@ -97,7 +102,7 @@ export function SlideStage({ studio, onPresent, onToast, onToggleRail, keysEnabl
             onClick={() => setView('view')}
             aria-label="보기" title="보기 모드"
           >
-            <IconEye size={15} /><span>보기</span>
+            <IconBookOpen size={15} /><span>보기</span>
           </button>
           <button
             type="button" role="tab" aria-selected={settings.viewMode === 'edit'}
@@ -120,7 +125,7 @@ export function SlideStage({ studio, onPresent, onToast, onToggleRail, keysEnabl
         <div className="stage-tools">
           <button
             type="button"
-            className={`tool-btn${settings.maskAll ? '' : ' on'}`}
+            className={`tool-btn mask-btn${settings.maskAll ? '' : ' on'}`}
             onClick={() => setSettings({ maskAll: !settings.maskAll })}
             title="가림막 전체 숨김 / 공개"
             aria-label={settings.maskAll ? '가림막 전체 공개' : '가림막 전체 숨김'}
@@ -132,67 +137,71 @@ export function SlideStage({ studio, onPresent, onToast, onToggleRail, keysEnabl
             {masks > 0 && <b className="count">{masks}</b>}
           </button>
 
-          <div className={`ink-tools${settings.penOn ? ' on' : ''}`}>
-            <button
-              type="button"
-              className={`tool-btn ink-toggle${settings.penOn ? ' on' : ''}`}
-              onClick={togglePen}
-              aria-pressed={settings.penOn}
-              title="형광펜 / 펜 켜기"
-              aria-label={settings.penOn ? '필기 끄기' : '필기 켜기'}
-              data-testid="pen-toggle"
-            >
-              <IconHighlighter size={15} /><span>필기</span>
-            </button>
-            {settings.penOn && (
-              <>
-                <div className="ink-tool-pick" role="group" aria-label="필기 도구">
-                  <button
-                    type="button" className={settings.tool === 'highlighter' ? 'on' : ''}
-                    onClick={() => setSettings({ tool: 'highlighter', color: INK_COLORS.highlighter[0].value })}
-                    title="형광펜"
-                  >
-                    <IconHighlighter size={14} />
-                  </button>
-                  <button
-                    type="button" className={settings.tool === 'pen' ? 'on' : ''}
-                    onClick={() => setSettings({ tool: 'pen', color: INK_COLORS.pen[0].value })}
-                    title="펜"
-                  >
-                    <IconPen size={14} />
-                  </button>
-                </div>
-                <div className="ink-palette" role="group" aria-label="필기 색">
-                  {INK_COLORS[settings.tool].map((swatch) => (
-                    <button
-                      key={swatch.value}
-                      type="button"
-                      className={settings.color === swatch.value ? 'on' : ''}
-                      style={{ background: swatch.value }}
-                      onClick={() => setSettings({ color: swatch.value })}
-                      aria-label={`${swatch.name} 색`}
-                      title={swatch.name}
-                    />
-                  ))}
-                </div>
-                <button type="button" className="icon-btn small" onClick={undoStroke} title="한 획 되돌리기" aria-label="한 획 되돌리기">
-                  <IconUndo size={15} />
-                </button>
-                <button
-                  type="button" className="icon-btn small" title="이 슬라이드 필기 지우기" aria-label="이 슬라이드 필기 지우기"
-                  onClick={() => { if (studio.slideStrokes.length) { studio.clearInk(); onToast('이 슬라이드 필기를 지웠습니다'); } }}
-                >
-                  <IconTrash size={15} />
-                </button>
-              </>
-            )}
-          </div>
+          <button
+            type="button"
+            className={`tool-btn ink-toggle${settings.penOn ? ' on' : ''}`}
+            onClick={togglePen}
+            aria-pressed={settings.penOn}
+            title="형광펜 / 펜 켜기"
+            aria-label={settings.penOn ? '필기 끄기' : '필기 켜기'}
+            data-testid="pen-toggle"
+          >
+            <IconHighlighter size={15} /><span>필기</span>
+          </button>
 
           <button type="button" className="tool-btn present-btn" onClick={onPresent} title="발표 모드 (F5)" aria-label="발표 모드" data-testid="present-button">
             <IconPresent size={15} /><span>발표 모드</span><kbd>F5</kbd>
           </button>
         </div>
       </div>
+
+      {settings.penOn && (
+        <div className="ink-subbar" data-testid="ink-subbar" role="toolbar" aria-label="필기 팔레트">
+          <span className="ink-subbar-label"><IconHighlighter size={14} />필기 팔레트</span>
+          <div className="ink-tool-pick" role="group" aria-label="필기 도구">
+            <button
+              type="button" className={settings.tool === 'highlighter' ? 'on' : ''}
+              onClick={() => setSettings({ tool: 'highlighter', color: INK_COLORS.highlighter[0].value })}
+              title="형광펜"
+            >
+              <IconHighlighter size={14} />
+            </button>
+            <button
+              type="button" className={settings.tool === 'pen' ? 'on' : ''}
+              onClick={() => setSettings({ tool: 'pen', color: INK_COLORS.pen[0].value })}
+              title="펜"
+            >
+              <IconPen size={14} />
+            </button>
+          </div>
+          <div className="ink-palette" role="group" aria-label="필기 색">
+            {INK_COLORS[settings.tool].map((swatch) => (
+              <button
+                key={swatch.value}
+                type="button"
+                className={settings.color === swatch.value ? 'on' : ''}
+                style={{ background: swatch.value }}
+                onClick={() => setSettings({ color: swatch.value })}
+                aria-label={`${swatch.name} 색`}
+                title={swatch.name}
+              />
+            ))}
+          </div>
+          <span className="ink-sep" aria-hidden />
+          <button type="button" className="icon-btn small" onClick={undoStroke} title="한 획 되돌리기" aria-label="한 획 되돌리기">
+            <IconUndo size={15} />
+          </button>
+          <button
+            type="button" className="icon-btn small" title="이 슬라이드 필기 지우기" aria-label="이 슬라이드 필기 지우기"
+            onClick={() => { if (studio.slideStrokes.length) { studio.clearInk(); onToast('이 슬라이드 필기를 지웠습니다'); } }}
+          >
+            <IconTrash size={15} />
+          </button>
+          <button type="button" className="ink-subbar-close" onClick={togglePen} title="필기 끄기" aria-label="필기 끄기">
+            끄기
+          </button>
+        </div>
+      )}
 
       <div className="stage-scroll" onPointerDown={onPointerDown} onPointerUp={onPointerUp} onPointerCancel={() => { dragStart.current = null; }}>
         <div className="stage-frame">

@@ -207,7 +207,7 @@ a { color: inherit; }
   animation: pop 0.12s ease-out;
 }
 @keyframes pop { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
-.deck-pop { left: 0; right: auto; min-width: 300px; }
+.deck-pop { left: 0; right: auto; min-width: 300px; z-index: 200; }
 .pop-head {
   margin: 6px 8px 4px; font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.1em;
   color: var(--muted); font-weight: 600;
@@ -323,6 +323,76 @@ a { color: inherit; }
 }
 .catalog-hint { font-size: 11.5px; color: var(--muted); }
 .catalog-empty { margin: 18px 0 0; font-size: 13px; color: var(--muted); }
+.catalog-empty-block { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; margin-top: 18px; }
+.catalog-empty-block .catalog-empty { margin: 0; }
+
+/* search · tag chips above the deck grid */
+.catalog-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 14px; }
+.catalog-search {
+  display: inline-flex; align-items: center; gap: 8px; flex: 1 1 260px; min-width: 0; max-width: 420px;
+  height: 38px; padding: 0 10px; border-radius: 10px;
+  border: 1px solid var(--line); background: var(--surface); color: var(--muted);
+}
+.catalog-search:focus-within { border-color: var(--accent-line); box-shadow: 0 0 0 3px var(--accent-veil); }
+.catalog-search input {
+  flex: 1; min-width: 0; height: 100%; border: 0; background: transparent;
+  color: var(--ink); font: inherit; font-size: 13px; outline: none;
+}
+.catalog-search input::-webkit-search-cancel-button { display: none; }
+.search-clear {
+  display: grid; place-items: center; width: 22px; height: 22px; border-radius: 6px;
+  border: 0; background: var(--surface-2); color: var(--muted); flex: none;
+}
+.search-clear:hover { color: var(--ink); background: var(--surface-3); }
+.tag-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.tag-chip {
+  display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 10px;
+  border-radius: 999px; border: 1px solid var(--line); background: var(--surface);
+  color: var(--ink-soft); font-size: 11.5px; font-weight: 500; white-space: nowrap;
+}
+.tag-chip b {
+  font-family: var(--mono); font-size: 9.5px; font-weight: 600; color: var(--muted);
+  background: var(--surface-2); border-radius: 5px; padding: 0 4px;
+}
+.tag-chip:hover { border-color: var(--accent-line); color: var(--accent); }
+.tag-chip.on { background: var(--accent-veil); border-color: var(--accent-line); color: var(--accent-deep); }
+.tag-chip.on b { color: var(--accent); background: var(--surface); }
+.tag-chip svg { color: var(--muted); }
+.tag-chip.on svg { color: var(--accent); }
+.catalog-filter-note { margin: 14px 0 0; font-size: 11.5px; color: var(--muted); }
+.catalog-filter-note { margin: 14px 0 0; font-size: 11.5px; color: var(--muted); }
+.link-btn {
+  border: 0; background: transparent; padding: 0; color: var(--accent);
+  font-size: 11.5px; font-weight: 600; text-decoration: underline; text-underline-offset: 2px;
+}
+
+/* a deck's own tags, on its card */
+.deck-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.deck-tag-chip {
+  display: inline-flex; align-items: center; max-width: 100%; padding: 2px 7px;
+  border-radius: 999px; border: 1px solid var(--line); background: var(--surface-2);
+  color: var(--ink-soft); font-size: 10.5px; font-weight: 500; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.deck-card .deck-tag-chip { background: color-mix(in srgb, var(--surface-2) 70%, var(--surface)); }
+.tag-preview { display: flex; flex-wrap: wrap; gap: 5px; margin: 0; }
+.field-optional { font-weight: 500; color: var(--muted); font-size: 10.5px; }
+
+/* 10 per page */
+.catalog-pager {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px;
+  margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--line);
+}
+.pager-info { margin-right: auto; font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
+.pager-pages { display: inline-flex; align-items: center; gap: 3px; }
+.pager-step, .pager-page {
+  min-width: 30px; height: 30px; padding: 0 9px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink-soft); font-size: 12px;
+}
+.pager-step:hover:not(:disabled), .pager-page:hover { border-color: var(--accent-line); color: var(--accent); }
+.pager-page { font-variant-numeric: tabular-nums; }
+.pager-page.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 700; }
+.pager-gap { min-width: 18px; text-align: center; color: var(--muted); font-size: 12px; }
 
 .deck-grid {
   list-style: none; margin: 18px 0 0; padding: 0;
@@ -445,29 +515,33 @@ a { color: inherit; }
 .rail-status.done { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); background: var(--ok-soft); }
 
 .rail-actions {
-  position: absolute; right: 6px; bottom: 5px; display: none; gap: 2px;
-  padding: 2px; border-radius: 7px; background: var(--surface); border: 1px solid var(--line);
+  position: fixed; z-index: 140; display: flex; gap: 2px;
+  padding: 2px; border-radius: 8px; background: var(--surface);
+  border: 1px solid var(--accent-line); box-shadow: var(--shadow-soft);
+  animation: pop 0.1s ease-out;
 }
-.rail-item:hover .rail-actions, .rail-item.active .rail-actions { display: flex; }
 .rail-actions button {
   display: grid; place-items: center; width: 21px; height: 21px; border-radius: 5px;
   border: 0; background: transparent; color: var(--muted);
 }
 .rail-actions button:hover { background: var(--surface-3); color: var(--accent); }
 .rail-actions button.danger:hover { color: var(--error); background: color-mix(in srgb, var(--error) 12%, transparent); }
+/* The deck menu opens over the rail's edge; the floating palette steps aside. */
+.app:has([data-testid="deck-menu"]) .rail-actions { opacity: 0; pointer-events: none; }
 
-.rail-foot { flex: none; padding: 10px; border-top: 1px solid var(--line); display: grid; gap: 7px; }
-.rail-foot .ghost-btn { width: 100%; }
-.rail-hint { margin: 0; font-size: 10.5px; color: var(--muted); line-height: 1.45; padding: 0 2px; }
-.rail-hint b { color: var(--ink-soft); font-weight: 600; }
+.rail-empty { margin: 0; padding: 10px 4px; font-size: 11px; color: var(--muted); }
 
 /* ── stage ─────────────────────────────────────────────────────────────── */
 .stage { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--bg); }
 .stage-bar {
-  flex: none; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  flex: none; display: flex; align-items: center; gap: 8px; flex-wrap: nowrap;
   padding: 9px 14px; border-bottom: 1px solid var(--line); background: var(--surface);
+  min-width: 0;
 }
-.seg { display: inline-flex; padding: 2px; border-radius: 9px; background: var(--surface-2); border: 1px solid var(--line); }
+.stage-bar .deck-switch { flex: 0 1 auto; min-width: 0; }
+.stage-bar .deck-btn { max-width: 100%; min-width: 0; }
+.stage-bar .deck-btn-name { max-width: 130px; min-width: 0; }
+.seg { flex: none; display: inline-flex; padding: 2px; border-radius: 9px; background: var(--surface-2); border: 1px solid var(--line); }
 .seg button {
   display: inline-flex; align-items: center; gap: 5px; height: 27px; padding: 0 9px;
   border: 0; border-radius: 7px; background: transparent; color: var(--muted); font-size: 12px;
@@ -475,7 +549,7 @@ a { color: inherit; }
 .seg button.on { background: var(--surface); color: var(--accent); box-shadow: var(--shadow-soft); font-weight: 600; }
 .seg.small button { height: 24px; padding: 0 7px; font-size: 11px; }
 
-.stage-tools { display: flex; align-items: center; gap: 6px; margin-left: auto; flex-wrap: wrap; }
+.stage-tools { display: flex; align-items: center; gap: 6px; margin-left: auto; flex-wrap: nowrap; flex: none; }
 .tool-btn {
   display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 9px;
   border-radius: 8px; border: 1px solid var(--line); background: var(--surface);
@@ -493,6 +567,25 @@ a { color: inherit; }
 .present-btn kbd { color: var(--on-accent); border-color: rgba(255,255,255,0.45); }
 
 .ink-tools { display: inline-flex; align-items: center; gap: 4px; }
+/* The pen's palette lives on its own row under the bar, so the bar never wraps. */
+.mask-btn span { display: none; }
+.ink-subbar {
+  flex: none; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 6px 14px; border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface-2) 82%, var(--surface));
+  animation: pop 0.12s ease-out;
+}
+.ink-subbar-label {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-family: var(--mono); font-size: 9.5px; font-weight: 600;
+  letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent);
+}
+.ink-sep { width: 1px; height: 18px; background: var(--line-strong); }
+.ink-subbar-close {
+  margin-left: auto; height: 26px; padding: 0 10px; border-radius: 7px;
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink-soft); font-size: 11.5px;
+}
+.ink-subbar-close:hover { border-color: var(--accent-line); color: var(--accent); }
 .ink-tool-pick { display: inline-flex; padding: 2px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); }
 .ink-tool-pick button { display: grid; place-items: center; width: 24px; height: 24px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); }
 .ink-tool-pick button.on { background: var(--surface); color: var(--accent); box-shadow: var(--shadow-soft); }
@@ -954,11 +1047,17 @@ a { color: inherit; }
 @media (max-width: 1280px) {
   .studio { grid-template-columns: 248px minmax(0, 1fr) 340px; }
   .ext-link { display: none; }
+  /* The second bar carries the deck switcher now: labels fold to icons first. */
+  .stage-bar .seg button { padding: 0 8px; }
+  .stage-bar .seg button span { display: none; }
+  .stage-bar .deck-btn-name { max-width: 110px; }
 }
 
 @media (max-width: 1080px) {
   .studio { grid-template-columns: 232px minmax(0, 1fr) 310px; }
-  .deck-btn-name { max-width: 120px; }
+  .stage-bar .deck-btn-name { max-width: 120px; }
+  .stage-tools .tool-btn span { display: none; }
+  .stage-tools .tool-btn kbd { display: none; }
   .brand-badge { display: none; }
 }
 
@@ -1029,8 +1128,16 @@ a { color: inherit; }
   .stage-bar { padding: 7px 9px; gap: 5px; }
   .stage-tools { gap: 4px; }
   .top-btn span { display: none; }
-  .deck-btn { max-width: 150px; padding: 0 8px; }
-  .deck-btn-name { max-width: 92px; font-size: 12px; }
+  .stage-bar .deck-btn { max-width: 150px; padding: 0 8px; }
+  .stage-bar .deck-btn-name { max-width: 92px; font-size: 12px; }
+  /* The deck popover hangs under its own button, so the button stays tappable. */
+  .popover.deck-pop { position: absolute; top: calc(100% + 6px); left: 0; right: auto; width: min(320px, calc(100vw - 18px)); min-width: 0; }
+  .ink-subbar { padding: 6px 9px; gap: 6px; }
+  .ink-subbar-label { display: none; }
+  .ink-subbar-close { height: 24px; padding: 0 8px; font-size: 11px; }
+  .catalog-tools { gap: 8px; }
+  .catalog-search { flex: 1 1 100%; max-width: none; }
+  .pager-info { flex: 1 1 100%; margin-right: 0; text-align: center; }
   .ext-link, .top-div { display: none; }
   /* Phone bars carry icons only, so 타이머 · 테마 · ⋮ always fit on one line. */
   .topbar { gap: 4px; padding: 0 6px 0 10px; }
@@ -1071,7 +1178,7 @@ a { color: inherit; }
   .brand-mark .mark { width: 14px; height: 18px; border-width: 2.5px; }
   .brand-mark .mark::after { inset: 3px -6px -6px 3px; border-width: 2px; }
   .deck-btn { padding: 0 7px; gap: 5px; }
-  .deck-btn-name { display: none; }
+  .stage-bar .deck-btn-name { display: none; }
   .brand { gap: 5px; }
   .brand-name { font-size: 15px; }
   .brand-app { font-size: 12.5px; }

@@ -1,4 +1,5 @@
 import type { SplitMode } from '../types/study';
+import { normalizeTags } from './tags';
 
 /**
  * Slide splitting, the way PKPilot0008 split a markdown article: a YAML
@@ -9,17 +10,24 @@ import type { SplitMode } from '../types/study';
 
 export interface FrontMatter {
   data: Record<string, string>;
+  /** `tags:` from the head — inline list, comma list or YAML block list. */
+  tags: string[];
   body: string;
   raw: string;
 }
 
 const FENCE = /^(?: {0,3})(```|~~~)/;
 
+/** Strips one layer of YAML quotes from a scalar. */
+function unquote(value: string): string {
+  return value.replace(/^["']|["']$/g, '').trim();
+}
+
 export function parseFrontMatter(src: string): FrontMatter {
   const text = src.replace(/\r\n?/g, '\n').replace(/^\uFEFF/, '');
   const lines = text.split('\n');
   if (!/^---\s*$/.test(lines[0] ?? '')) {
-    return { data: {}, body: text, raw: '' };
+    return { data: {}, tags: [], body: text, raw: '' };
   }
   let end = -1;
   for (let i = 1; i < lines.length; i += 1) {
@@ -28,7 +36,7 @@ export function parseFrontMatter(src: string): FrontMatter {
       break;
     }
   }
-  if (end < 0) return { data: {}, body: text, raw: '' };
+  if (end < 0) return { data: {}, tags: [], body: text, raw: '' };
 
   const head = lines.slice(1, end);
   const looksLikeYaml =
@@ -37,16 +45,78 @@ export function parseFrontMatter(src: string): FrontMatter {
       const trimmed = line.trim();
       return !trimmed || trimmed.startsWith('#') || /^[A-Za-z0-9_.-]+\s*:/.test(trimmed) || /^\s*-\s/.test(line);
     });
-  if (!looksLikeYaml) return { data: {}, body: text, raw: '' };
+  if (!looksLikeYaml) return { data: {}, tags: [], body: text, raw: '' };
 
   const raw = head.join('\n');
   const data: Record<string, string> = {};
+  const lists: Record<string, string[]> = {};
+  let current = '';
   for (const line of raw.split('\n')) {
+    const item = /^\s*-\s+(.*)$/.exec(line);
+    if (item && current) {
+      (lists[current] ??= []).push(unquote(item[1].replace(/\s+#.*$/, '')));
+      continue;
+    }
     const match = /^([A-Za-z0-9_-]+)\s*:\s*(.*)$/.exec(line.trim());
-    if (!match) continue;
-    data[match[1].toLowerCase()] = match[2].replace(/^["']|["']$/g, '').trim();
+    if (!match) { current = ''; continue; }
+    const key = match[1].toLowerCase();
+    const value = match[2].trim();
+    current = key;
+    if (!value) { data[key] = ''; continue; }
+    // `tags: [Python, 기초]` — the brackets are the YAML flow list.
+    const flow = /^\[(.*)\]$/.exec(value);
+    if (flow) {
+      lists[key] = flow[1].split(',').map((piece) => unquote(piece.trim()));
+      data[key] = flow[1].trim();
+      continue;
+    }
+    data[key] = unquote(value);
   }
-  return { data, body: lines.slice(end + 1).join('\n'), raw };
+
+  const tags = normalizeTags(lists.tags ?? data.tags ?? '');
+  return { data, tags, body: lines.slice(end + 1).join('\n'), raw };
+}
+
+/**
+ * `#태그` tokens at the top of a markdown body — the fallback when a document
+ * carries no `tags:` frontmatter. ATX headings (`# 제목`) and fenced code are
+ * never tags; any other `#단어` on the first lines of the body is.
+ */
+export function extractHashtags(markdown: string, limit = 8): string[] {
+  const lines = markdown.split('\n');
+  const found: string[] = [];
+  let fence: string | null = null;
+  let seen = 0;
+  for (const line of lines) {
+    const fenceMatch = FENCE.exec(line);
+    if (fenceMatch) {
+      if (!fence) fence = fenceMatch[1];
+      else if (fence === fenceMatch[1]) fence = null;
+      continue;
+    }
+    if (fence) continue;
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    seen += 1;
+    if (seen > 30) break;
+    // `# 제목` / `## 2장` are headings, not tags.
+    if (/^#{1,6}\s/.test(trimmed)) continue;
+    const tokens = /(^|[\s([{（,、·/])(#[^\s#,.;:!?()[\]{}<>"'`~|]+)/g;
+    let match = tokens.exec(trimmed);
+    while (match) {
+      found.push(match[2]);
+      if (normalizeTags(found).length >= limit) return normalizeTags(found);
+      match = tokens.exec(trimmed);
+    }
+  }
+  return normalizeTags(found, limit);
+}
+
+/** The deck's tags from a markdown source: frontmatter first, else hashtags. */
+export function extractTags(src: string): string[] {
+  const { tags, body } = parseFrontMatter(src);
+  if (tags.length) return tags;
+  return extractHashtags(body);
 }
 
 function stripInlineMarkdown(text: string): string {

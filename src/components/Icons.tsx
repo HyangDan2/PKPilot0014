@@ -41,6 +41,10 @@ export const IconPresent = (p: IconProps) => (
 export const IconEye = (p: IconProps) => (
   <Svg {...p}><path d="M2.5 12S6 5.8 12 5.8 21.5 12 21.5 12 18 18.2 12 18.2 2.5 12 2.5 12Z" /><circle cx="12" cy="12" r="2.8" /></Svg>
 );
+/** 보기 모드: an open slide/page — never confused with the mask eye. */
+export const IconBookOpen = (p: IconProps) => (
+  <Svg {...p}><path d="M12 6.4C10.3 5.2 8.1 4.6 4.5 4.6v12.8c3.6 0 5.8.6 7.5 1.8 1.7-1.2 3.9-1.8 7.5-1.8V4.6c-3.6 0-5.8.6-7.5 1.8Z" /><path d="M12 6.4v13" /></Svg>
+);
 export const IconEyeOff = (p: IconProps) => (
   <Svg {...p}><path d="M3 3l18 18" /><path d="M10.6 6.1A9.7 9.7 0 0 1 12 6c6 0 9.5 6 9.5 6a16 16 0 0 1-2.6 3.2" /><path d="M6.4 7.8A16 16 0 0 0 2.5 12S6 18 12 18a9.6 9.6 0 0 0 4-.8" /><path d="M9.9 10a3 3 0 0 0 4.1 4.2" /></Svg>
 );
@@ -112,6 +116,12 @@ export const IconHome = (p: IconProps) => (
 );
 export const IconHelp = (p: IconProps) => (
   <Svg {...p}><circle cx="12" cy="12" r="8.6" /><path d="M9.5 9.2a2.6 2.6 0 0 1 5 .8c0 1.7-2.5 1.9-2.5 3.5" /><path d="M12 16.7h.01" /></Svg>
+);
+export const IconSearch = (p: IconProps) => (
+  <Svg {...p}><circle cx="10.8" cy="10.8" r="6.3" /><path d="m15.4 15.4 4.4 4.4" /></Svg>
+);
+export const IconTag = (p: IconProps) => (
+  <Svg {...p}><path d="M4 11.6V5.4A1.4 1.4 0 0 1 5.4 4h6.2a1.4 1.4 0 0 1 1 .4l7 7a1.4 1.4 0 0 1 0 2l-5.2 5.2a1.4 1.4 0 0 1-2 0l-7-7a1.4 1.4 0 0 1-.4-1Z" /><circle cx="8.6" cy="8.6" r="1.3" fill="currentColor" stroke="none" /></Svg>
 );
 
 /** The HD2Lab dual-skew mark, drawn for the 56px title bar. */

@@ -1,6 +1,7 @@
 import { strToU8, zipSync } from 'fflate';
 import type { Deck, StrokesBySlide } from '../types/study';
 import { deckToMarkdown, serializeStudy } from './study';
+import { normalizeTags } from './tags';
 import { safeFilename } from './files';
 
 /** What the unified export modal can hand back. */
@@ -29,9 +30,11 @@ export function exportBaseName(deck: Deck): string {
  */
 export function deckNotesMarkdown(deck: Deck): string {
   const title = deck.title.replace(/"/g, "'");
+  const tags = normalizeTags(deck.tags);
   const head = [
     '---',
     `title: ${title} — 메모`,
+    ...(tags.length ? [`tags: [${tags.join(', ')}]`] : []),
     `slides: ${deck.slides.length}`,
     `exported: ${new Date().toISOString()}`,
     '---',

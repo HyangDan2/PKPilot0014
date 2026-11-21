@@ -11,6 +11,7 @@ function deck(): Deck {
     id: 'deck_test',
     title: '시험 대비 · 물리',
     summary: '덱 요약 — 공식 셋만 외우기',
+    tags: ['물리', '기말'],
     createdAt: 1,
     updatedAt: 2,
     slides: [
