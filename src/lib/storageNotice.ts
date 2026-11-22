@@ -14,6 +14,14 @@ export interface StorageNotice {
  * and the way out (.study.json) rather than only reporting a failure.
  */
 export function storageNoticeFor(status: StorageStatus): StorageNotice | null {
+  if (status.error === 'read') {
+    return {
+      key: 'read',
+      tone: 'error',
+      title: '저장된 작업을 읽지 못했습니다',
+      body: '이번 화면은 저장본이 아니라 임시본입니다 — 기존 덱을 덮어쓰지 않으려고 저장을 멈췄습니다. 다시 읽기를 누르거나, 잠시 뒤 새로고침해 주세요.',
+    };
+  }
   if (status.error === 'quota') {
     return {
       key: 'quota',

@@ -207,6 +207,20 @@ export function parseStudyFile(text: string): StudyFile {
 
 export type NoteExportMode = 'comment' | 'quote' | 'none';
 
+/**
+ * A note as an HTML comment. A note that itself contains `-->` (or `<!--`)
+ * cannot live inside a comment: it would end it early and leave the rest of
+ * the note in the slide body. Those notes go in an encoded comment, which is
+ * read back exactly; everything else stays readable text.
+ */
+function noteComment(note: string): string {
+  if (!/-->|<!--/.test(note)) return `<!-- note:\n${note}\n-->`;
+  const bytes = new TextEncoder().encode(note);
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return `<!-- note-base64:\n${btoa(binary)}\n-->`;
+}
+
 /** The deck as one `.md` file: `---` between slides, notes as comments. */
 export function deckToMarkdown(deck: Deck, noteMode: NoteExportMode = 'comment'): string {
   const tags = normalizeTags(deck.tags);
@@ -227,7 +241,7 @@ export function deckToMarkdown(deck: Deck, noteMode: NoteExportMode = 'comment')
         parts.push(
           noteMode === 'quote'
             ? `> **노트**\n>\n${slide.note.trim().split('\n').map((line) => `> ${line}`).join('\n')}`
-            : `<!-- note:\n${slide.note.trim()}\n-->`,
+            : noteComment(slide.note.trim()),
         );
       }
       return parts.join('\n\n');

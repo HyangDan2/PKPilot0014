@@ -1049,6 +1049,13 @@ a { color: inherit; }
   margin-left: auto; flex: none; padding: 2px 4px; border: 0; background: none;
   color: var(--accent); font-size: 11.5px; font-weight: 700; cursor: pointer;
 }
+.storage-notice-action {
+  margin-left: auto; flex: none; padding: 4px 10px; border-radius: 8px;
+  border: 1px solid var(--line-strong); background: var(--surface);
+  color: var(--accent); font-size: 11.5px; font-weight: 700; cursor: pointer;
+}
+.storage-notice-action + .storage-notice-close { margin-left: 0; }
+.storage-notice-action:hover { border-color: var(--accent); }
 
 /* ── toast · fab ───────────────────────────────────────────────────────── */
 .toast {

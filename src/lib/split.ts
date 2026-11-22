@@ -155,9 +155,46 @@ export interface SlideChunk {
   title: string;
 }
 
-const NOTE_RE = /<!--\s*note:\s*([\s\S]*?)-->/i;
+const NOTE_RE = /<!--\s*note(-base64)?:\s*([\s\S]*?)-->/i;
 /** The heading our own `quote` export writes above a note block. */
 const QUOTE_NOTE_HEAD = /^ {0,3}>[ \t]*\*\*노트\*\*[ \t]*$/;
+
+/**
+ * True at the end of this line if an HTML comment opened on it is still open.
+ * A comment that opens and closes on one line leaves nothing behind.
+ */
+function commentStateAfter(insideBefore: boolean, line: string): boolean {
+  let inside = insideBefore;
+  let rest = line;
+  for (;;) {
+    if (!inside) {
+      const open = rest.indexOf('<!--');
+      if (open < 0) return false;
+      rest = rest.slice(open + 4);
+      inside = true;
+      continue;
+    }
+    const close = rest.indexOf('-->');
+    if (close < 0) return true;
+    rest = rest.slice(close + 3);
+    inside = false;
+  }
+}
+
+/**
+ * Decodes the encoded form our comment export falls back to when a note itself
+ * contains `-->` (which would end the comment early) or `<!--`.
+ */
+function decodeNotePayload(value: string): string {
+  try {
+    const binary = atob(value.replace(/\s+/g, ''));
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+    return new TextDecoder().decode(bytes);
+  } catch {
+    return '';
+  }
+}
 
 /**
  * A note written as a quote block — what `deckToMarkdown(deck, 'quote')`
@@ -193,7 +230,9 @@ function extractQuoteNote(chunk: string): { markdown: string; note: string } | n
 export function extractNote(chunk: string): { markdown: string; note: string } {
   const match = NOTE_RE.exec(chunk);
   if (match) {
-    const note = match[1].replace(/^\n+|\n+$/g, '').trim();
+    const encoded = Boolean(match[1]);
+    const body = match[2].replace(/^\n+|\n+$/g, '').trim();
+    const note = encoded ? decodeNotePayload(body) : body;
     return { markdown: (chunk.slice(0, match.index) + chunk.slice(match.index + match[0].length)).trim(), note };
   }
   return extractQuoteNote(chunk) ?? { markdown: chunk.trim(), note: '' };
@@ -206,6 +245,9 @@ export function splitMarkdown(src: string, mode: SplitMode = 'hr'): SlideChunk[]
   const chunks: string[] = [];
   let buffer: string[] = [];
   let fence: FenceMark | null = null;
+  // Inside an HTML comment nothing is markdown: a `---` line there (a rule
+  // typed in a note) must not split the slide, and a fence there is text.
+  let inComment = false;
 
   const flush = () => {
     const text = buffer.join('\n');
@@ -214,6 +256,11 @@ export function splitMarkdown(src: string, mode: SplitMode = 'hr'): SlideChunk[]
   };
 
   for (const line of lines) {
+    if (inComment) {
+      buffer.push(line);
+      inComment = commentStateAfter(true, line);
+      continue;
+    }
     if (fence) {
       if (isFenceClose(line, fence)) fence = null;
       buffer.push(line);
@@ -233,6 +280,7 @@ export function splitMarkdown(src: string, mode: SplitMode = 'hr'): SlideChunk[]
       flush();
     }
     buffer.push(line);
+    inComment = commentStateAfter(false, line);
   }
   flush();
 

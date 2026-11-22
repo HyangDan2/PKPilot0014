@@ -96,8 +96,12 @@ export function DeckSwitch({ studio, onRestoreSample, onToast }: Props) {
             type="button" role="menuitem" className="pop-item danger"
             onClick={() => {
               if (window.confirm(`‘${deck.title}’ 덱을 삭제할까요? 이 덱의 필기도 함께 지워집니다.`)) {
-                deleteDeck(deck.id);
-                onToast('덱을 삭제했습니다');
+                const target = deck.id;
+                setOpen(false);
+                void deleteDeck(target).then((ok) => {
+                  onToast(ok ? '덱을 삭제했습니다' : '덱을 삭제하지 못했습니다 — 저장소 오류');
+                });
+                return;
               }
               setOpen(false);
             }}

@@ -2,6 +2,7 @@ import { createDeck, createSlide } from './study';
 import { splitMarkdown } from './split';
 import type { Deck, StrokesBySlide } from '../types/study';
 import SAMPLE from './sample-deck.md?raw';
+import SAMPLE_V2 from './sample-deck-v2.md?raw';
 import LEGACY_SAMPLE_V1 from './sample-deck-v1.md?raw';
 
 /**
@@ -34,10 +35,10 @@ export function sampleDeckSignature(deck: Pick<Deck, 'title' | 'summary' | 'slid
   ]);
 }
 
-function buildSample(source: string, id: string): Deck {
+function buildSample(source: string, id: string, title: string = SAMPLE_DECK_TITLE): Deck {
   const chunks = splitMarkdown(source, 'hr');
   const slides = chunks.map((chunk) => createSlide(chunk.markdown, chunk.note, chunk.title));
-  const deck = createDeck(SAMPLE_DECK_TITLE, slides);
+  const deck = createDeck(title, slides);
   deck.id = id;
   deck.summary = SAMPLE_DECK_SUMMARY;
   return deck;
@@ -56,6 +57,26 @@ let legacySignature: string | null = null;
 function legacySampleSignature(): string {
   legacySignature ??= sampleDeckSignature(buildSample(LEGACY_SAMPLE_V1, 'sample-legacy'));
   return legacySignature;
+}
+
+let v2Signature: string | null = null;
+/**
+ * The sample deck exactly as build 2 shipped it — the Sága Glitra era, before
+ * the rename. Kept as a signature so a copy written by that build can be
+ * recognised as untouched: an old record signed the copy with its own
+ * signature, which says nothing about edits, so the only trustworthy test is
+ * whether the stored content equals what we actually shipped at that version.
+ */
+function shippedV2Signature(): string {
+  v2Signature ??= sampleDeckSignature(buildSample(SAMPLE_V2, 'sample-v2', 'Sága Glitra 시작 덱'));
+  return v2Signature;
+}
+
+/** Signature of the sample deck a build actually shipped at `version`. */
+function shippedSignatureAt(version: number): string | null {
+  if (version <= 1) return legacySampleSignature();
+  if (version === 2) return shippedV2Signature();
+  return null;
 }
 
 export interface SampleUpgradeInput {
@@ -89,12 +110,16 @@ export function sampleBuildSignature(): string {
  * Should a stored sample deck be replaced with the current one?
  *
  * Only an untouched copy is refreshed: it must carry no ink, its id must still
- * be the sample's, and its content must equal the shipped sample recorded when
- * it was written. A deck flagged as edited — or one the shipped signature no
- * longer matches — is left alone, notes and study state included.
+ * be the sample's, and its content must equal something we can trust. Records
+ * written by this build carry the shipped signature beside the copy's own, and
+ * only a match there counts. Older records signed the copy with itself — that
+ * signature matches every copy, edited or not — so for them the copy must be
+ * identical to the sample that build actually shipped at its recorded version.
+ * A deck flagged as edited, holding ink, or matching no shipped sample at all
+ * is left alone, notes and study state included.
  */
 export function shouldUpgradeSampleDeck({
-  deck, storedVersion, storedFingerprint, storedBuildFingerprint, storedEdited, hasInk,
+  deck, storedVersion, storedBuildFingerprint, storedEdited, hasInk,
 }: SampleUpgradeInput): boolean {
   if (hasInk) return false;
   const signature = sampleDeckSignature(deck);
@@ -105,11 +130,11 @@ export function shouldUpgradeSampleDeck({
     // Newer records carry the shipped signature separately; only a copy that
     // still matches it is untouched.
     if (storedBuildFingerprint !== undefined) return storedBuildFingerprint === signature;
-    // Records written before that field existed compared the copy with itself,
-    // so they can only tell an untouched copy by its old-sample content.
-    return storedFingerprint === signature || signature === legacySampleSignature();
+    // An old record cannot tell us anything but its content: the copy matches
+    // the sample that version shipped, or it is the person's work.
+    return shippedSignatureAt(storedVersion) === signature;
   }
-  return signature === legacySampleSignature() || signature === sampleBuildSignature();
+  return signature === legacySampleSignature() || signature === shippedV2Signature();
 }
 
 export interface SampleUpgradeResult {
@@ -149,4 +174,5 @@ export function upgradeSampleDecks(
 
 /** The sample deck's markdown, for tests and previews. */
 export const SAMPLE_MARKDOWN: string = SAMPLE;
+export const SAMPLE_V2_MARKDOWN: string = SAMPLE_V2;
 export const LEGACY_SAMPLE_MARKDOWN: string = LEGACY_SAMPLE_V1;

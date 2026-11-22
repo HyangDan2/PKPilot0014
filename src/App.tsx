@@ -131,11 +131,28 @@ export default function App() {
     try {
       const text = await readTextFile(file);
       const parsed = parseStudyFile(text);
-      studio.replaceAll(parsed);
+      // The toast waits for the transaction: a backup that storage refused
+      // must not be announced as restored.
+      const ok = await studio.replaceAll(parsed);
+      if (!ok) {
+        notify('백업을 복원하지 못했습니다 — 브라우저 저장소에 기록할 수 없습니다');
+        return;
+      }
       setView('studio');
       notify(`백업을 복원했습니다 — 덱 ${parsed.decks.length}개`);
     } catch (error) {
       notify(error instanceof Error ? error.message : '백업을 복원하지 못했습니다');
+    }
+  };
+
+  const retryStorageRead = async () => {
+    const outcome = await studio.retryStorageRead();
+    if (outcome === 'adopted') notify('저장된 작업을 다시 읽었습니다');
+    else if (outcome === 'empty') notify('저장된 작업이 없어 시작 덱으로 열었습니다');
+    else if (outcome === 'kept') {
+      notify('이 탭에서 새로 만든 작업이 있습니다 — 내보내기로 백업을 받아 두세요');
+    } else if (outcome === 'failed') {
+      notify('아직 저장소를 읽지 못했습니다 — 잠시 뒤 다시 시도해 주세요');
     }
   };
 
@@ -147,6 +164,16 @@ export default function App() {
             <b>{storageNotice.title}</b>
             <span>{storageNotice.body}</span>
           </div>
+          {storageNotice.key === 'read' && (
+            <button
+              type="button"
+              className="storage-notice-action"
+              onClick={() => { void retryStorageRead(); }}
+              data-testid="storage-read-retry"
+            >
+              다시 읽기
+            </button>
+          )}
           <button
             type="button"
             className="storage-notice-close"
@@ -195,7 +222,11 @@ export default function App() {
               onPresent={() => setPresent(true)}
               onToast={notify}
               onToggleRail={() => setRailOpen((value) => !value)}
-              onRestoreSample={() => { studio.restoreSample(); notify('샘플 덱을 복원했습니다'); }}
+              onRestoreSample={() => {
+                void studio.restoreSample().then((ok) => {
+                  notify(ok ? '샘플 덱을 복원했습니다' : '샘플 덱을 복원하지 못했습니다 — 저장소 오류');
+                });
+              }}
               keysEnabled={!present && !openMd && !exportOpen && !helpOpen}
             />
 
