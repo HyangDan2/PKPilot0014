@@ -90,3 +90,33 @@ describe('titles', () => {
     expect(deckTitleFrom('---\ntitle: 덱 이름\n---\n# 다른 제목')).toBe('덱 이름');
   });
 });
+
+describe('splitMarkdown — 인용 블록 노트', () => {
+  it('> **노트** 블록을 슬라이드 노트로 읽는다', () => {
+    const src = [
+      '## 1장',
+      '',
+      '본문',
+      '',
+      '> **노트**',
+      '>',
+      '> 첫 줄',
+      '> 둘째 줄',
+      '',
+      '---',
+      '',
+      '## 2장',
+    ].join('\n');
+    const chunks = splitMarkdown(src, 'hr');
+    expect(chunks).toHaveLength(2);
+    expect(chunks[0].note).toBe('첫 줄\n둘째 줄');
+    expect(chunks[0].markdown).toBe('## 1장\n\n본문');
+    expect(chunks[1].note).toBe('');
+  });
+
+  it('주석 노트와 우선순위가 겹치지 않는다', () => {
+    const src = '## 1장\n\n본문\n\n<!-- note: 주석 노트 -->\n\n> **노트**\n> 인용 노트';
+    const chunks = splitMarkdown(src, 'hr');
+    expect(chunks[0].note).toBe('주석 노트');
+  });
+});

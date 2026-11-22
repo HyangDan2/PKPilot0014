@@ -35,6 +35,13 @@ export interface Deck {
 
 export type StrokeTool = 'highlighter' | 'pen';
 
+/** Stroke width in current pixels, shared by the canvas and the backup reader. */
+export const INK_WIDTH: Record<StrokeTool, number> = { highlighter: 16, pen: 2.6 };
+
+export function inkWidth(tool: StrokeTool): number {
+  return INK_WIDTH[tool] ?? INK_WIDTH.highlighter;
+}
+
 export interface InkPoint {
   x: number;
   y: number;

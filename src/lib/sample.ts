@@ -62,31 +62,54 @@ export interface SampleUpgradeInput {
   deck: Deck;
   /** Version recorded with the stored workspace, when it has one. */
   storedVersion?: number;
-  /** Signature recorded when the stored sample was written. */
+  /** Signature of the deck as it was written — the copy on disk. */
   storedFingerprint?: string;
+  /** Signature of the shipped sample at the time it was written. */
+  storedBuildFingerprint?: string;
+  /** The copy was already different from the shipped sample when written. */
+  storedEdited?: boolean;
   /** True when the person drew on any slide of this deck. */
   hasInk: boolean;
+}
+
+let buildSignature: string | null = null;
+/**
+ * Signature of the sample deck this build ships. Kept apart from the signature
+ * of the copy on disk: a copy identical to this one is untouched and may be
+ * refreshed, while any difference (a note, a status, a reworded line) marks a
+ * deck the person made their own. Recording only one signature made every
+ * edited copy look untouched on the next version bump and overwrote it.
+ */
+export function sampleBuildSignature(): string {
+  buildSignature ??= sampleDeckSignature(createSampleDeck());
+  return buildSignature;
 }
 
 /**
  * Should a stored sample deck be replaced with the current one?
  *
- * Only an untouched copy is refreshed: it must carry no ink and its content
- * must still match what was written (the recorded fingerprint), or — for a
- * deck stored before version tracking — the exact original sample content.
- * A deck the person edited never matches, so it is left alone.
+ * Only an untouched copy is refreshed: it must carry no ink, its id must still
+ * be the sample's, and its content must equal the shipped sample recorded when
+ * it was written. A deck flagged as edited — or one the shipped signature no
+ * longer matches — is left alone, notes and study state included.
  */
 export function shouldUpgradeSampleDeck({
-  deck, storedVersion, storedFingerprint, hasInk,
+  deck, storedVersion, storedFingerprint, storedBuildFingerprint, storedEdited, hasInk,
 }: SampleUpgradeInput): boolean {
   if (hasInk) return false;
   const signature = sampleDeckSignature(deck);
+  if (storedEdited) return false;
   if (storedVersion !== undefined) {
     if (storedVersion >= SAMPLE_VERSION) return false;
     if (deck.id !== SAMPLE_DECK_ID) return false;
-    return storedFingerprint === signature;
+    // Newer records carry the shipped signature separately; only a copy that
+    // still matches it is untouched.
+    if (storedBuildFingerprint !== undefined) return storedBuildFingerprint === signature;
+    // Records written before that field existed compared the copy with itself,
+    // so they can only tell an untouched copy by its old-sample content.
+    return storedFingerprint === signature || signature === legacySampleSignature();
   }
-  return signature === legacySampleSignature();
+  return signature === legacySampleSignature() || signature === sampleBuildSignature();
 }
 
 export interface SampleUpgradeResult {
@@ -101,13 +124,20 @@ export interface SampleUpgradeResult {
  */
 export function upgradeSampleDecks(
   decks: Deck[],
-  meta: { version?: number; fingerprint?: string },
+  meta: { version?: number; fingerprint?: string; buildFingerprint?: string; edited?: boolean },
   strokes: StrokesBySlide,
 ): SampleUpgradeResult {
   let upgraded = false;
   const next = decks.map((deck) => {
     const hasInk = deck.slides.some((slide) => (strokes[slide.id]?.length ?? 0) > 0);
-    if (!shouldUpgradeSampleDeck({ deck, storedVersion: meta.version, storedFingerprint: meta.fingerprint, hasInk })) {
+    if (!shouldUpgradeSampleDeck({
+      deck,
+      storedVersion: meta.version,
+      storedFingerprint: meta.fingerprint,
+      storedBuildFingerprint: meta.buildFingerprint,
+      storedEdited: meta.edited,
+      hasInk,
+    })) {
       return deck;
     }
     upgraded = true;

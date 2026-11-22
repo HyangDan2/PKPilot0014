@@ -12,16 +12,26 @@ interface Props {
 }
 
 let mermaidSeq = 0;
+/** How many times one surface retries a failed mermaid load on its own. */
+const MERMAID_RETRIES = 2;
 
 /**
  * One rendered markdown surface. Owns the two things HTML alone cannot do:
  * mask chips that open on click, and mermaid diagrams drawn after mount.
+ *
+ * The diagrams follow the theme: the theme is passed to mermaid on every
+ * render, and a theme change redraws the boxes that are already on screen —
+ * their previous SVG was drawn for the other background. A failed load is
+ * retried a couple of times and the source stays readable meanwhile.
  */
 export function RenderedMarkdown({ markdown, maskAll, theme, className = '', onCopy }: Props) {
   const { html } = useMemo(() => renderMarkdown(markdown), [markdown]);
   const hostRef = useRef<HTMLDivElement | null>(null);
   const [overrides, setOverrides] = useState<Record<string, boolean>>({});
   const [copied, setCopied] = useState(false);
+  const drawnTheme = useRef<Theme | null>(null);
+  const retries = useRef(0);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => { setOverrides({}); }, [maskAll, markdown]);
 
@@ -44,42 +54,64 @@ export function RenderedMarkdown({ markdown, maskAll, theme, className = '', onC
     const nodes = Array.from(host.querySelectorAll<HTMLElement>('[data-mermaid]'));
     if (!nodes.length) return;
     let cancelled = false;
+    let retryTimer: number | null = null;
 
     (async () => {
+      let mermaid;
       try {
-        const mermaid = await loadMermaid();
-        if (cancelled) return;
-        mermaid.initialize({
-          startOnLoad: false,
-          securityLevel: 'strict',
-          theme: theme === 'dark' ? 'dark' : 'default',
-          fontFamily: 'Inter, "Noto Sans KR", system-ui, sans-serif',
-        });
-        for (const node of nodes) {
-          if (cancelled || node.dataset.rendered === 'true') continue;
-          const code = decodeURIComponent(node.dataset.mermaid ?? '');
-          mermaidSeq += 1;
-          const id = `sg-mermaid-${mermaidSeq}`;
-          try {
-            const { svg } = await mermaid.render(id, code);
-            if (cancelled) return;
-            node.innerHTML = svg;
-            node.dataset.rendered = 'true';
-          } catch (error) {
-            if (cancelled) return;
-            node.innerHTML =
-              `<p class="mermaid-error">다이어그램을 그리지 못했습니다: ` +
-              `${String(error).split('\n')[0].replace(/[<>&]/g, '')}</p>`;
-            node.dataset.rendered = 'error';
-          }
-        }
+        mermaid = await loadMermaid();
+        retries.current = 0;
       } catch {
-        /* mermaid unavailable — the source stays visible */
+        if (cancelled) return;
+        // The source stays visible; try again shortly, a couple of times, so a
+        // single flaky fetch does not leave every diagram as raw text.
+        if (retries.current < MERMAID_RETRIES) {
+          retries.current += 1;
+          retryTimer = window.setTimeout(() => { if (!cancelled) setAttempt((value) => value + 1); }, 1200);
+        } else {
+          host.querySelectorAll<HTMLElement>('[data-mermaid]').forEach((node) => {
+            if (node.dataset.rendered !== 'true') node.dataset.rendered = 'error';
+          });
+        }
+        return;
+      }
+      if (cancelled) return;
+      mermaid.initialize({
+        startOnLoad: false,
+        securityLevel: 'strict',
+        theme: theme === 'dark' ? 'dark' : 'default',
+        fontFamily: 'Inter, "Noto Sans KR", system-ui, sans-serif',
+      });
+      drawnTheme.current = theme;
+      for (const node of nodes) {
+        if (cancelled) return;
+        const already = node.dataset.rendered === 'true' && node.dataset.renderedTheme === theme;
+        if (already) continue;
+        if (node.dataset.rendered !== 'true') node.innerHTML = '';
+        const code = decodeURIComponent(node.dataset.mermaid ?? '');
+        mermaidSeq += 1;
+        const id = `sg-mermaid-${mermaidSeq}`;
+        try {
+          const { svg } = await mermaid.render(id, code);
+          if (cancelled) return;
+          node.innerHTML = svg;
+          node.dataset.rendered = 'true';
+          node.dataset.renderedTheme = theme;
+        } catch (error) {
+          if (cancelled) return;
+          node.innerHTML =
+            `<p class="mermaid-error">다이어그램을 그리지 못했습니다: ` +
+            `${String(error).split('\n')[0].replace(/[<>&]/g, '')}</p>`;
+          node.dataset.rendered = 'error';
+        }
       }
     })();
 
-    return () => { cancelled = true; };
-  }, [html, theme]);
+    return () => {
+      cancelled = true;
+      if (retryTimer !== null) window.clearTimeout(retryTimer);
+    };
+  }, [html, theme, attempt]);
 
   const handleClick = (event: React.MouseEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement;

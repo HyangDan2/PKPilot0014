@@ -12,6 +12,7 @@ import { parseStudyFile } from './lib/study';
 import { downloadBytes, downloadText, readTextFile } from './lib/files';
 import { buildExportZip, deckNotesMarkdown, exportBaseName, exportFilename } from './lib/exportBundle';
 import type { ExportKind } from './lib/exportBundle';
+import { storageNoticeFor } from './lib/storageNotice';
 
 /** The app opens on the landing; the studio is one deck click away. */
 type View = 'landing' | 'studio';
@@ -27,6 +28,7 @@ export default function App() {
   const [printing, setPrinting] = useState(false);
   const [railOpen, setRailOpen] = useState(false);
   const [toast, setToast] = useState('');
+  const [dismissedNotice, setDismissedNotice] = useState('');
   const jsonRef = useRef<HTMLInputElement | null>(null);
 
   const notify = useCallback((message: string) => setToast(message), []);
@@ -91,25 +93,31 @@ export default function App() {
     const deck = studio.deck;
     const base = exportBaseName(deck);
     const name = exportFilename(base, kind);
-    if (kind === 'study') {
-      downloadText(name, studio.exportStudy(), 'application/json');
-    } else if (kind === 'zip') {
-      downloadBytes(
-        name,
-        buildExportZip({
-          deck,
-          decks: studio.decks,
-          activeDeckId: studio.activeDeckId,
-          strokes: studio.strokes,
-        }),
-        'application/zip',
-      );
-    } else if (kind === 'notes') {
-      downloadText(name, deckNotesMarkdown(deck), 'text/markdown;charset=utf-8');
-    } else if (kind === 'slides') {
-      downloadText(name, studio.exportMarkdown('none'), 'text/markdown;charset=utf-8');
-    } else {
-      downloadText(name, studio.exportMarkdown(noteMode), 'text/markdown;charset=utf-8');
+    try {
+      if (kind === 'study') {
+        downloadText(name, studio.exportStudy(), 'application/json');
+      } else if (kind === 'zip') {
+        downloadBytes(
+          name,
+          buildExportZip({
+            deck,
+            decks: studio.decks,
+            activeDeckId: studio.activeDeckId,
+            strokes: studio.strokes,
+          }),
+          'application/zip',
+        );
+      } else if (kind === 'notes') {
+        downloadText(name, deckNotesMarkdown(deck), 'text/markdown;charset=utf-8');
+      } else if (kind === 'slides') {
+        downloadText(name, studio.exportMarkdown('none'), 'text/markdown;charset=utf-8');
+      } else {
+        downloadText(name, studio.exportMarkdown(noteMode), 'text/markdown;charset=utf-8');
+      }
+    } catch (error) {
+      setExportOpen(false);
+      notify(error instanceof Error ? `내보내지 못했습니다 — ${error.message}` : '내보내지 못했습니다');
+      return;
     }
     setExportOpen(false);
     notify(kind === 'zip' ? 'ZIP 번들을 내려받았습니다 — 슬라이드 · 메모 · 백업 3개 파일' : `‘${name}’ 파일을 내려받았습니다`);
@@ -117,6 +125,7 @@ export default function App() {
 
   const noteTotal = studio.deck.slides.filter((slide) => slide.note.trim()).length;
   const inkTotal = Object.values(studio.strokes).reduce((sum, list) => sum + list.length, 0);
+  const storageNotice = storageNoticeFor(studio.storage);
 
   const importStudy = async (file: File) => {
     try {
@@ -132,6 +141,24 @@ export default function App() {
 
   return (
     <>
+      {storageNotice && storageNotice.key !== dismissedNotice && (
+        <div className={`storage-notice ${storageNotice.tone}`} role="alert" data-testid="storage-notice">
+          <div className="storage-notice-text">
+            <b>{storageNotice.title}</b>
+            <span>{storageNotice.body}</span>
+          </div>
+          <button
+            type="button"
+            className="storage-notice-close"
+            onClick={() => setDismissedNotice(storageNotice.key)}
+            aria-label="저장 알림 닫기"
+            data-testid="storage-notice-close"
+          >
+            닫기
+          </button>
+        </div>
+      )}
+
       {view === 'landing' ? (
         <Landing
           decks={studio.decks}
