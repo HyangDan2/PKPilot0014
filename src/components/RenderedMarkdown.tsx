@@ -29,7 +29,7 @@ export function RenderedMarkdown({ markdown, maskAll, theme, className = '', onC
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
-    host.querySelectorAll<HTMLElement>('.glitra-mask').forEach((el) => {
+    host.querySelectorAll<HTMLElement>('.slide-mask').forEach((el) => {
       const id = el.dataset.maskId ?? '0';
       const open = overrides[id] ?? maskAll;
       el.dataset.revealed = open ? 'true' : 'false';
@@ -95,7 +95,7 @@ export function RenderedMarkdown({ markdown, maskAll, theme, className = '', onC
       });
       return;
     }
-    const mask = target.closest<HTMLElement>('.glitra-mask');
+    const mask = target.closest<HTMLElement>('.slide-mask');
     if (mask) {
       const id = mask.dataset.maskId ?? '0';
       const current = overrides[id] ?? maskAll;
@@ -105,7 +105,7 @@ export function RenderedMarkdown({ markdown, maskAll, theme, className = '', onC
 
   const handleKey = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== 'Enter' && event.key !== ' ') return;
-    const mask = (event.target as HTMLElement).closest<HTMLElement>('.glitra-mask');
+    const mask = (event.target as HTMLElement).closest<HTMLElement>('.slide-mask');
     if (!mask) return;
     event.preventDefault();
     const id = mask.dataset.maskId ?? '0';

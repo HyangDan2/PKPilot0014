@@ -13,7 +13,7 @@ export function PrintSheet({ studio }: { studio: StudioApi }) {
     <section className="print-sheet" aria-hidden="true">
       <header className="print-head">
         <div>
-          <p className="print-kicker">HD2LAB · SÁGA GLITRA · STUDY SHEET</p>
+          <p className="print-kicker">HD2LAB · SLIDEDECK · STUDY SHEET</p>
           <h1>{deck.title}</h1>
           <p className="print-meta">
             {deck.slides.length}장 · {new Date().toLocaleDateString('ko-KR')} · hyangdan2.github.io/PKPilot0014

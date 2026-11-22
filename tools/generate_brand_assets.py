@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-PKPilot0014 · Sága Glitra — HD2Lab brand asset generator (Soft Iris)
+PKPilot0014 · SlideDeck — HD2Lab brand asset generator (Soft Iris)
 ====================================================================
-Produces the official HD2Lab asset set for Sága Glitra out of the same
+Produces the official HD2Lab asset set for SlideDeck out of the same
 dual-skew mark the app header uses:
 
     favicon.svg, favicon.ico(16/32/48), favicon-32x32.png,
@@ -150,8 +150,8 @@ def build_icons(out_dir: str):
 
 # ── manifest ────────────────────────────────────────────────────────────────
 MANIFEST = {
-    "name": "HD2Lab Sága Glitra",
-    "short_name": "Sága Glitra",
+    "name": "HD2Lab SlideDeck",
+    "short_name": "SlideDeck",
     "description": "마크다운으로 덱을 만들고 슬라이드마다 1:1로 묶인 노트·형광펜 필기·"
                    "가림막 암기·집중 타이머로 공부하는 브라우저 로컬 공부방 스튜디오.",
     "lang": "ko",
@@ -209,11 +209,11 @@ def build_og(out_dir: str) -> str:
     # 2) kicker + privacy mark
     r = 5 * S
     d.ellipse((104 * S - r, 90 * S - r, 104 * S + r, 90 * S + r), fill=PURPLE)
-    spaced(d, (124 * S, 96 * S), "04 / STUDY · SÁGA GLITRA",
+    spaced(d, (124 * S, 96 * S), "04 / STUDY · SLIDEDECK",
            font(14 * S, "Medium"), MUTED, spacing=2.2 * S)
     d.text((1096 * S, 96 * S), "LOCAL ONLY · 0 B UPLOAD", font=mono(13 * S), fill=DIM, anchor="rs")
 
-    # 3) dual-skew mark + HD2Lab | Sága Glitra
+    # 3) dual-skew mark + HD2Lab | SlideDeck
     mark = render_mark(100 * S)
     img.paste(mark, (84 * S, 120 * S), mark)
 
@@ -223,7 +223,7 @@ def build_og(out_dir: str) -> str:
     pipe_x = 224 * S + d.textlength("HD2Lab", font=f_title) + 18 * S
     d.line([(pipe_x, (base_y - 40) * S), (pipe_x, (base_y + 2) * S)],
            fill="#D9D2EE", width=int(2.5 * S))
-    d.text((pipe_x + 20 * S, base_y * S), "Sága Glitra", font=f_title, fill=PURPLE, anchor="ls")
+    d.text((pipe_x + 20 * S, base_y * S), "SlideDeck", font=f_title, fill=PURPLE, anchor="ls")
 
     # 4) headline + sub copy
     f_head = font(46 * S, "Bold")
@@ -270,7 +270,7 @@ def build_og(out_dir: str) -> str:
 
     # 6) footer rail
     d.line([(104 * S, 566 * S), (1096 * S, 566 * S)], fill=LINE, width=int(1 * S))
-    spaced(d, (104 * S, 588 * S), "MARKDOWN SLIDE × STUDY ROOM · SÁGA GLITRA",
+    spaced(d, (104 * S, 588 * S), "MARKDOWN SLIDE × STUDY ROOM · SLIDEDECK",
            font(11.5 * S, "Medium"), MUTED, spacing=1.5 * S)
     d.text((1096 * S, 588 * S), "hyangdan2.github.io/PKPilot0014", font=mono(11.5 * S),
            fill=DIM, anchor="rs")
@@ -284,7 +284,7 @@ def build_og(out_dir: str) -> str:
 
 def main() -> int:
     import argparse
-    ap = argparse.ArgumentParser(description="PKPilot0014 (Sága Glitra) 브랜드 에셋 생성")
+    ap = argparse.ArgumentParser(description="PKPilot0014 (SlideDeck) 브랜드 에셋 생성")
     ap.add_argument("--font")
     ap.add_argument("--out", default=os.path.join(ROOT, "public"))
     args = ap.parse_args()

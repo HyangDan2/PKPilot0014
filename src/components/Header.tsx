@@ -54,7 +54,7 @@ export function Header({
         <span className="brand-mark" aria-hidden><span className="mark" /></span>
         <span className="brand-name">HD2Lab</span>
         <span className="brand-div" aria-hidden />
-        <span className="brand-app">Sága Glitra</span>
+        <span className="brand-app">SlideDeck</span>
         <span className="brand-badge">STUDY</span>
       </button>
 

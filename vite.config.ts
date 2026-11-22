@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-// Sága Glitra is published under a GitHub Pages project sub-path.
+// SlideDeck is published under a GitHub Pages project sub-path.
 export default defineConfig({
   base: '/PKPilot0014/',
   plugins: [react()],

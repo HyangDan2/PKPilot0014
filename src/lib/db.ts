@@ -7,6 +7,8 @@
  * back to an in-memory store instead of throwing.
  */
 
+// Legacy database name from before the rename — kept so existing decks and ink
+// strokes open in the renamed build instead of starting from an empty shelf.
 const DB_NAME = 'saga-glitra';
 const DB_VERSION = 1;
 const WORKSPACE = 'workspace';

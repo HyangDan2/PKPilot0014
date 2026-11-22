@@ -249,7 +249,7 @@ test.describe('랜딩 · 강의 라이브러리', () => {
 
     const sample = page.getByTestId('deck-card-sample-saga-glitra');
     await expect(sample).toBeVisible();
-    await expect(sample).toContainText('Sága Glitra 시작 덱');
+    await expect(sample).toContainText('SlideDeck 시작 덱');
     await expect(sample).toContainText('슬라이드 5장');
     await expect(sample).toContainText('이해 완료');
     await expect(page.getByTestId('deck-count')).toHaveText('1');
