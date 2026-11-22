@@ -1,4 +1,5 @@
 import type { SplitMode } from '../types/study';
+import { FenceTracker, fenceMark, isFenceClose, type FenceMark } from './fence';
 import { normalizeTags } from './tags';
 
 /**
@@ -15,8 +16,6 @@ export interface FrontMatter {
   body: string;
   raw: string;
 }
-
-const FENCE = /^(?: {0,3})(```|~~~)/;
 
 /** Strips one layer of YAML quotes from a scalar. */
 function unquote(value: string): string {
@@ -85,16 +84,10 @@ export function parseFrontMatter(src: string): FrontMatter {
 export function extractHashtags(markdown: string, limit = 8): string[] {
   const lines = markdown.split('\n');
   const found: string[] = [];
-  let fence: string | null = null;
+  const fence = new FenceTracker();
   let seen = 0;
   for (const line of lines) {
-    const fenceMatch = FENCE.exec(line);
-    if (fenceMatch) {
-      if (!fence) fence = fenceMatch[1];
-      else if (fence === fenceMatch[1]) fence = null;
-      continue;
-    }
-    if (fence) continue;
+    if (fence.feed(line)) continue;
     const trimmed = line.trim();
     if (!trimmed) continue;
     seen += 1;
@@ -135,13 +128,9 @@ function stripInlineMarkdown(text: string): string {
 
 export function extractTitle(markdown: string): string {
   const lines = markdown.split('\n');
-  let inFence = false;
+  const fence = new FenceTracker();
   for (const line of lines) {
-    if (FENCE.test(line)) {
-      inFence = !inFence;
-      continue;
-    }
-    if (inFence) continue;
+    if (fence.feed(line)) continue;
     const heading = /^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$/.exec(line);
     if (heading) return clampTitle(stripInlineMarkdown(heading[2]));
   }
@@ -167,12 +156,47 @@ export interface SlideChunk {
 }
 
 const NOTE_RE = /<!--\s*note:\s*([\s\S]*?)-->/i;
+/** The heading our own `quote` export writes above a note block. */
+const QUOTE_NOTE_HEAD = /^ {0,3}>[ \t]*\*\*노트\*\*[ \t]*$/;
+
+/**
+ * A note written as a quote block — what `deckToMarkdown(deck, 'quote')`
+ * produces:
+ *
+ *     > **노트**
+ *     >
+ *     > 첫 줄
+ *
+ * Read back so a combined `.md` in either note style re-imports with its notes
+ * intact. Only a block whose first line is exactly `**노트**` counts; an
+ * ordinary quotation stays part of the slide body.
+ */
+function extractQuoteNote(chunk: string): { markdown: string; note: string } | null {
+  const lines = chunk.split('\n');
+  const head = lines.findIndex((line) => QUOTE_NOTE_HEAD.test(line));
+  if (head < 0) return null;
+  let end = head;
+  while (end + 1 < lines.length && /^ {0,3}>/.test(lines[end + 1])) end += 1;
+  const note = lines
+    .slice(head + 1, end + 1)
+    .map((line) => line.replace(/^ {0,3}>[ \t]?/, ''))
+    .join('\n')
+    .trim();
+  if (!note) return null;
+  const markdown = [...lines.slice(0, head), ...lines.slice(end + 1)]
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  return { markdown, note };
+}
 
 export function extractNote(chunk: string): { markdown: string; note: string } {
   const match = NOTE_RE.exec(chunk);
-  if (!match) return { markdown: chunk.trim(), note: '' };
-  const note = match[1].replace(/^\n+|\n+$/g, '').trim();
-  return { markdown: (chunk.slice(0, match.index) + chunk.slice(match.index + match[0].length)).trim(), note };
+  if (match) {
+    const note = match[1].replace(/^\n+|\n+$/g, '').trim();
+    return { markdown: (chunk.slice(0, match.index) + chunk.slice(match.index + match[0].length)).trim(), note };
+  }
+  return extractQuoteNote(chunk) ?? { markdown: chunk.trim(), note: '' };
 }
 
 /** Splits a markdown source into slides. Empty chunks are dropped. */
@@ -181,7 +205,7 @@ export function splitMarkdown(src: string, mode: SplitMode = 'hr'): SlideChunk[]
   const lines = body.split('\n');
   const chunks: string[] = [];
   let buffer: string[] = [];
-  let fence: string | null = null;
+  let fence: FenceMark | null = null;
 
   const flush = () => {
     const text = buffer.join('\n');
@@ -190,21 +214,23 @@ export function splitMarkdown(src: string, mode: SplitMode = 'hr'): SlideChunk[]
   };
 
   for (const line of lines) {
-    const fenceMatch = FENCE.exec(line);
-    if (fenceMatch) {
-      if (!fence) fence = fenceMatch[1];
-      else if (fence === fenceMatch[1]) fence = null;
+    if (fence) {
+      if (isFenceClose(line, fence)) fence = null;
       buffer.push(line);
       continue;
     }
-    if (!fence) {
-      if (mode === 'hr' && /^\s{0,3}---\s*$/.test(line)) {
-        flush();
-        continue;
-      }
-      if (mode === 'heading' && /^\s{0,2}##\s+\S/.test(line) && buffer.some((l) => l.trim())) {
-        flush();
-      }
+    const open = fenceMark(line);
+    if (open) {
+      fence = open;
+      buffer.push(line);
+      continue;
+    }
+    if (mode === 'hr' && /^\s{0,3}---\s*$/.test(line)) {
+      flush();
+      continue;
+    }
+    if (mode === 'heading' && /^\s{0,2}##\s+\S/.test(line) && buffer.some((l) => l.trim())) {
+      flush();
     }
     buffer.push(line);
   }

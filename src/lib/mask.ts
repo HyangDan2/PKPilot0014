@@ -4,6 +4,8 @@
  * tokens are turned back into chips after sanitising.
  */
 
+import { FenceTracker } from './fence';
+
 const MASK_RE = /==([^=\n]+?)==/g;
 const TOKEN = '%%SGMASK';
 
@@ -20,7 +22,7 @@ export function escapeHtml(text: string): string {
 export function extractMasks(src: string): { text: string; masks: string[] } {
   const masks: string[] = [];
   const lines = src.split('\n');
-  let fence: string | null = null;
+  const fence = new FenceTracker();
 
   const replaceInline = (segment: string): string =>
     segment
@@ -36,13 +38,7 @@ export function extractMasks(src: string): { text: string; masks: string[] } {
       .join('');
 
   const out = lines.map((line) => {
-    const fenceMatch = /^(?: {0,3})(```|~~~)/.exec(line);
-    if (fenceMatch) {
-      if (!fence) fence = fenceMatch[1];
-      else if (fence === fenceMatch[1]) fence = null;
-      return line;
-    }
-    if (fence) return line;
+    if (fence.feed(line)) return line;
     return replaceInline(line);
   });
 

@@ -1,28 +1,35 @@
 import { useEffect, useRef, useState } from 'react';
 import type { InkPoint, Stroke, StrokeTool } from '../types/study';
-import { uid } from '../lib/study';
+import { inkWidth } from '../types/study';
+import { InkSession } from '../lib/ink';
 
 interface Props {
   strokes: Stroke[];
   enabled: boolean;
   tool: StrokeTool;
   color: string;
-  onCommit: (stroke: Stroke) => void;
+  /** The slide this layer draws on. A stroke stays with it if the slide changes. */
+  slideId: string;
+  onCommit: (stroke: Stroke, slideId: string) => void;
 }
 
-export function inkWidth(tool: StrokeTool): number {
-  return tool === 'highlighter' ? 16 : 2.6;
-}
+export { inkWidth };
 
 /**
  * 형광펜 / 펜 layer. Points are stored normalised (0–1) so a stroke keeps its
  * place when the 16:9 canvas changes size; the SVG is drawn in current pixels.
+ *
+ * The gesture state lives in an {@link InkSession} ref, not in React state:
+ * one pointer gesture commits exactly one stroke, and the stroke lands on the
+ * slide it was started on even if the viewer moves on mid-stroke.
  */
-export function InkLayer({ strokes, enabled, tool, color, onCommit }: Props) {
+export function InkLayer({ strokes, enabled, tool, color, slideId, onCommit }: Props) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [live, setLive] = useState<InkPoint[]>([]);
-  const drawing = useRef(false);
+  const session = useRef(new InkSession());
+  const latest = useRef({ tool, color, slideId, onCommit });
+  latest.current = { tool, color, slideId, onCommit };
 
   useEffect(() => {
     const node = wrapRef.current;
@@ -33,6 +40,33 @@ export function InkLayer({ strokes, enabled, tool, color, onCommit }: Props) {
     observer.observe(node);
     return () => observer.disconnect();
   }, []);
+
+  /** Ends the current gesture: one stroke, on the slide it started on. */
+  const finish = () => {
+    const { tool: penTool, color: penColor, onCommit: commit } = latest.current;
+    const done = session.current.end(penTool, penColor, latest.current.slideId);
+    setLive([]);
+    if (done) commit(done.stroke, done.slideId);
+  };
+
+  // A slide switch (arrow key, drawer, swipe) must not leave a stale live path
+  // on the new slide, and ink already drawn stays with the slide it started on.
+  useEffect(() => {
+    if (!session.current.drawing) {
+      setLive([]);
+      return;
+    }
+    finish();
+    // `finish` reads the newest tool/color through `latest`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slideId]);
+
+  // Turning the pen off mid-stroke keeps what was drawn.
+  useEffect(() => {
+    if (enabled || !session.current.drawing) return;
+    finish();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled]);
 
   const toPoint = (event: React.PointerEvent<SVGSVGElement>): InkPoint => {
     const box = wrapRef.current?.getBoundingClientRect();
@@ -47,35 +81,20 @@ export function InkLayer({ strokes, enabled, tool, color, onCommit }: Props) {
     if (!enabled) return;
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
-    drawing.current = true;
-    setLive([toPoint(event)]);
+    const points = session.current.begin(slideId, toPoint(event), event.pointerId);
+    setLive([...points]);
   };
 
   const onMove = (event: React.PointerEvent<SVGSVGElement>) => {
-    if (!enabled || !drawing.current) return;
-    const point = toPoint(event);
-    setLive((prev) => {
-      const last = prev[prev.length - 1];
-      if (last && Math.hypot(last.x - point.x, last.y - point.y) < 0.0018) return prev;
-      return [...prev, point];
-    });
+    if (!enabled || !session.current.owns(event.pointerId)) return;
+    const before = session.current.live.length;
+    const points = session.current.extend(toPoint(event));
+    if (points.length !== before) setLive([...points]);
   };
 
-  const finish = () => {
-    if (!drawing.current) return;
-    drawing.current = false;
-    setLive((points) => {
-      if (points.length > 0) {
-        onCommit({
-          id: uid('st'),
-          tool,
-          color,
-          width: inkWidth(tool),
-          points: points.length === 1 ? [points[0], points[0]] : points,
-        });
-      }
-      return [];
-    });
+  const onEnd = (event: React.PointerEvent<SVGSVGElement>) => {
+    if (!session.current.owns(event.pointerId)) return;
+    finish();
   };
 
   const pathFor = (points: InkPoint[]): string =>
@@ -90,9 +109,15 @@ export function InkLayer({ strokes, enabled, tool, color, onCommit }: Props) {
         viewBox={`0 0 ${size.w || 1} ${size.h || 1}`}
         onPointerDown={onDown}
         onPointerMove={onMove}
-        onPointerUp={finish}
-        onPointerCancel={finish}
-        onPointerLeave={() => { if (drawing.current) finish(); }}
+        onPointerUp={onEnd}
+        onPointerCancel={onEnd}
+        onPointerLeave={(event) => {
+          // While the pointer is captured the stroke keeps going outside the
+          // canvas; only an uncaptured leave ends it here.
+          if (!session.current.owns(event.pointerId)) return;
+          if (event.currentTarget.hasPointerCapture?.(event.pointerId)) return;
+          finish();
+        }}
         style={{ cursor: enabled ? 'crosshair' : 'default' }}
       >
         {strokes.map((stroke) => (

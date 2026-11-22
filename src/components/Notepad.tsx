@@ -23,6 +23,10 @@ export function Notepad({ studio, onToast }: Props) {
   const position = deck.slides.findIndex((item) => item.id === slide.id) + 1;
 
   const write = (text: string) => {
+    // Typing turns an empty-note preview into the editor and keeps it there:
+    // with the textarea unmounting after the first character, the caret was
+    // lost mid-sentence.
+    if (mode !== 'edit') setMode('edit');
     if (deckTab) setSummary(text);
     else updateSlide({ note: text });
   };
@@ -86,10 +90,16 @@ export function Notepad({ studio, onToast }: Props) {
             <small>{deckTab ? `${deck.slides.length}장 전체 요약 노트` : `${position}장 · 이 슬라이드에 1:1로 묶인 노트`}</small>
           </div>
           <div className="seg small" role="tablist" aria-label="노트 보기">
-            <button type="button" role="tab" aria-selected={editing} className={editing ? 'on' : ''} onClick={() => setMode('edit')}>
+            <button
+              type="button" role="tab" aria-selected={editing} className={editing ? 'on' : ''}
+              onClick={() => setMode('edit')} aria-label="노트 편집" title="노트 편집"
+            >
               <IconEdit size={13} /><span>편집</span>
             </button>
-            <button type="button" role="tab" aria-selected={!editing} className={!editing ? 'on' : ''} onClick={() => setMode('preview')}>
+            <button
+              type="button" role="tab" aria-selected={!editing} className={!editing ? 'on' : ''}
+              onClick={() => setMode('preview')} aria-label="노트 미리보기" title="노트 미리보기"
+            >
               <IconEye size={13} /><span>미리보기</span>
             </button>
           </div>

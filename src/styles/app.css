@@ -1025,6 +1025,31 @@ a { color: inherit; }
   border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink-soft);
 }
 
+/* ── storage notice ────────────────────────────────────────────────────── */
+/* Only shown while the browser is not keeping the work (quota, blocked, or
+   memory-only), so the person can back up before the tab closes. */
+.storage-notice {
+  position: fixed; z-index: 380;
+  top: 64px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: flex-start; gap: 10px;
+  width: min(680px, calc(100vw - 20px));
+  padding: 10px 12px; border-radius: 12px;
+  border: 1px solid var(--line-strong);
+  border-left-width: 3px;
+  background: color-mix(in srgb, var(--surface) 95%, transparent);
+  backdrop-filter: blur(10px);
+  box-shadow: var(--shadow);
+}
+.storage-notice.warn { border-left-color: var(--warn); }
+.storage-notice.error { border-left-color: #e0567a; }
+.storage-notice-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.storage-notice-text b { font-size: 12.5px; letter-spacing: -0.2px; color: var(--ink); }
+.storage-notice-text span { font-size: 11.5px; line-height: 1.45; color: var(--muted); }
+.storage-notice-close {
+  margin-left: auto; flex: none; padding: 2px 4px; border: 0; background: none;
+  color: var(--accent); font-size: 11.5px; font-weight: 700; cursor: pointer;
+}
+
 /* ── toast · fab ───────────────────────────────────────────────────────── */
 .toast {
   position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 12px);
@@ -1120,6 +1145,9 @@ a { color: inherit; }
 
 @media (max-width: 760px) {
   .topbar { height: 52px; padding: 0 8px 0 12px; gap: 6px; }
+  .storage-notice { top: 56px; padding: 8px 10px; }
+  .storage-notice-text b { font-size: 12px; }
+  .storage-notice-text span { font-size: 11px; }
   .brand-name { font-size: 17px; }
   .brand-app { font-size: 15px; }
   .studio { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }

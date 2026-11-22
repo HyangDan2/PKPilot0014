@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, type PointerEvent as ReactPointerEvent } from 'react';
 import type { StudioApi } from '../store/studio';
-import type { InkPoint } from '../types/study';
 import { INK_COLORS, STATUS_LABEL } from '../types/study';
 import { maskCount } from '../lib/mask';
 import { resolveSwipe } from '../lib/gesture';
@@ -27,7 +26,7 @@ interface Props {
 const SWIPE_BLOCKERS = 'button, a, input, textarea, select, [contenteditable], [role="textbox"], .slide-mask, .code-block, .mermaid-block';
 
 export function SlideStage({ studio, onPresent, onToast, onToggleRail, onRestoreSample, keysEnabled = true }: Props) {
-  const { deck, slide, settings, setSettings, updateSlide, toggleStatus, addStroke, undoStroke } = studio;
+  const { deck, slide, settings, setSettings, updateSlide, toggleStatus, undoStroke } = studio;
   const index = deck.slides.findIndex((item) => item.id === slide.id);
   const masks = useMemo(() => maskCount(slide.markdown), [slide.markdown]);
   const bodyMarkdown = useMemo(
@@ -279,10 +278,8 @@ export function SlideStage({ studio, onPresent, onToast, onToggleRail, onRestore
                 enabled={settings.penOn}
                 tool={settings.tool}
                 color={settings.color}
-                onCommit={(stroke) => {
-                  const ink: InkPoint[] = stroke.points;
-                  if (ink.length) addStroke(stroke);
-                }}
+                slideId={slide.id}
+                onCommit={(stroke, slideId) => studio.addStrokeTo(slideId, stroke)}
               />
             )}
 

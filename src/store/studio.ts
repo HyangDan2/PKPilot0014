@@ -7,9 +7,14 @@ import {
   createDeck, createSlide, cycleStatus, deckToMarkdown, importMarkdown, parseStudyFile,
   serializeStudy, uid,
 } from '../lib/study';
-import { deleteStrokes, getWorkspace, loadAllStrokes, setStrokes as saveStrokes, setWorkspace } from '../lib/db';
 import {
-  SAMPLE_DECK_ID, SAMPLE_VERSION, createSampleDeck, sampleDeckSignature, upgradeSampleDecks,
+  deleteStrokes, flushStorage, getWorkspace, loadAllStrokes, replaceWorkspace, setStrokes as saveStrokes,
+  setWorkspace, storageStatus, subscribeStorage,
+} from '../lib/db';
+import type { StorageStatus } from '../lib/db';
+import {
+  SAMPLE_DECK_ID, SAMPLE_VERSION, createSampleDeck, sampleBuildSignature, sampleDeckSignature,
+  upgradeSampleDecks,
 } from '../lib/sample';
 import type { SplitMode } from '../types/study';
 
@@ -21,8 +26,16 @@ interface Persisted {
   settings: StudioSettings;
   /** Which sample deck build the workspace last carried. */
   sampleDeckVersion?: number;
-  /** Signature of the sample deck when it was last written. */
+  /** Signature of the sample deck copy as it was written. */
   sampleDeckFingerprint?: string;
+  /**
+   * Signature of the sample deck this build shipped at that moment. Kept apart
+   * from the copy's own signature so a deck the person edited can never pass
+   * for an untouched one when the sample version rises.
+   */
+  sampleDeckBuildFingerprint?: string;
+  /** The copy already differed from the shipped sample when it was written. */
+  sampleDeckEdited?: boolean;
 }
 
 export interface StudioApi {
@@ -35,6 +48,7 @@ export interface StudioApi {
   strokes: StrokesBySlide;
   slideStrokes: Stroke[];
   settings: StudioSettings;
+  storage: StorageStatus;
   setSettings: (patch: Partial<StudioSettings>) => void;
   selectDeck: (deckId: string) => void;
   selectSlide: (slideId: string) => void;
@@ -53,6 +67,7 @@ export interface StudioApi {
   moveSlideTo: (slideId: string, index: number) => void;
   setSummary: (text: string) => void;
   addStroke: (stroke: Stroke) => void;
+  addStrokeTo: (slideId: string, stroke: Stroke) => void;
   undoStroke: () => void;
   clearInk: () => void;
   replaceAll: (file: StudyFile) => void;
@@ -66,6 +81,33 @@ function makeDeckFromImport(text: string, filename: string, mode: SplitMode): De
   return createDeck(result.title, slides, result.tags);
 }
 
+function deckSlideIds(deck: Deck): string[] {
+  return deck.slides.map((slide) => slide.id);
+}
+
+/** The workspace record for one moment, fingerprints included. */
+function makePersisted(
+  decks: Deck[],
+  activeDeckId: string,
+  activeSlideId: string,
+  settings: StudioSettings,
+): Persisted {
+  const sample = decks.find((item) => item.id === SAMPLE_DECK_ID);
+  const build = sample ? sampleBuildSignature() : undefined;
+  const signature = sample ? sampleDeckSignature(sample) : undefined;
+  return {
+    version: 1,
+    decks,
+    activeDeckId,
+    activeSlideId,
+    settings,
+    sampleDeckVersion: SAMPLE_VERSION,
+    sampleDeckFingerprint: signature,
+    sampleDeckBuildFingerprint: build,
+    sampleDeckEdited: sample && build ? signature !== build : undefined,
+  };
+}
+
 export function useStudio(): StudioApi {
   const [ready, setReady] = useState(false);
   const [decks, setDecks] = useState<Deck[]>([]);
@@ -73,9 +115,30 @@ export function useStudio(): StudioApi {
   const [activeSlideId, setActiveSlideId] = useState('');
   const [strokes, setStrokes] = useState<StrokesBySlide>({});
   const [settings, setSettingsState] = useState<StudioSettings>(DEFAULT_SETTINGS);
+  const [storage, setStorage] = useState<StorageStatus>(() => storageStatus());
 
   const savedStrokes = useRef<Record<string, string>>({});
   const hydrated = useRef(false);
+  // Latest values for callbacks that must not re-subscribe (page-close flush,
+  // deck deletion, erase-and-restore ordering).
+  const decksRef = useRef<Deck[]>(decks);
+  const strokesRef = useRef<StrokesBySlide>(strokes);
+  const settingsRef = useRef<StudioSettings>(settings);
+  const activeDeckRef = useRef(activeDeckId);
+  const activeSlideRef = useRef(activeSlideId);
+  decksRef.current = decks;
+  strokesRef.current = strokes;
+  settingsRef.current = settings;
+  activeDeckRef.current = activeDeckId;
+  activeSlideRef.current = activeSlideId;
+
+  /** The deck the person is looking at, read from the refs at call time. */
+  const currentDeck = useCallback(
+    () => decksRef.current.find((item) => item.id === activeDeckRef.current) ?? decksRef.current[0],
+    [],
+  );
+
+  useEffect(() => subscribeStorage(setStorage), []);
 
   // ── hydrate ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -92,15 +155,33 @@ export function useStudio(): StudioApi {
           const upgraded = upgradeSampleDecks(stored.decks, {
             version: stored.sampleDeckVersion,
             fingerprint: stored.sampleDeckFingerprint,
+            buildFingerprint: stored.sampleDeckBuildFingerprint,
+            edited: stored.sampleDeckEdited,
           }, ink as StrokesBySlide);
           if (cancelled) return;
           setDecks(upgraded.decks);
+          // Ink is keyed by slide id: anything that no longer belongs to a deck
+          // (an upgraded sample's old slides, ink from a deck that is gone) is
+          // not loaded back into the room.
+          const liveIds = new Set(upgraded.decks.flatMap((item) => item.slides.map((entry) => entry.id)));
+          const keptInk: StrokesBySlide = {};
+          for (const [slideId, list] of Object.entries(ink)) {
+            if (liveIds.has(slideId)) keptInk[slideId] = list as Stroke[];
+          }
+          // Files written before the build fingerprint existed cannot tell an
+          // untouched sample from an edited one; the next save records both so
+          // an edit made under this build is never upgraded away.
           const activeDeck = upgraded.decks.find((item) => item.id === stored.activeDeckId) ?? upgraded.decks[0];
           const keepSlide = activeDeck?.slides.some((item) => item.id === stored.activeSlideId);
           setActiveDeckId(activeDeck.id);
           setActiveSlideId(keepSlide ? stored.activeSlideId : activeDeck.slides[0]?.id ?? '');
           setSettingsState({ ...DEFAULT_SETTINGS, ...stored.settings });
-          if (Object.keys(ink).length) setStrokes(ink as StrokesBySlide);
+          if (Object.keys(keptInk).length) {
+            setStrokes(keptInk);
+            for (const [slideId, list] of Object.entries(keptInk)) {
+              savedStrokes.current[slideId] = JSON.stringify(list);
+            }
+          }
         } else {
           const sample = createSampleDeck();
           setDecks([sample]);
@@ -145,17 +226,7 @@ export function useStudio(): StudioApi {
   useEffect(() => {
     if (!hydrated.current || !ready || !deck) return;
     const timer = window.setTimeout(() => {
-      const sampleDeck = decks.find((item) => item.id === SAMPLE_DECK_ID);
-      const payload: Persisted = {
-        version: 1,
-        decks,
-        activeDeckId: deck.id,
-        activeSlideId: slide?.id ?? '',
-        settings,
-        sampleDeckVersion: SAMPLE_VERSION,
-        sampleDeckFingerprint: sampleDeck ? sampleDeckSignature(sampleDeck) : undefined,
-      };
-      void setWorkspace(payload);
+      void setWorkspace(makePersisted(decks, deck.id, slide?.id ?? '', settings));
     }, 350);
     return () => window.clearTimeout(timer);
   }, [decks, settings, deck, slide, ready]);
@@ -168,6 +239,35 @@ export function useStudio(): StudioApi {
       void saveStrokes(slideId, list);
     }
   }, [strokes]);
+
+  // Closing the tab or switching apps must not wait for the 350ms debounce:
+  // write the newest workspace at once and let the pending ink writes finish.
+  useEffect(() => {
+    const flush = () => {
+      if (!hydrated.current || !ready) return;
+      const currentDecks = decksRef.current;
+      if (!currentDecks.length) return;
+      const currentDeck = currentDecks.find((item) => item.id === activeDeckRef.current) ?? currentDecks[0];
+      void setWorkspace(makePersisted(
+        currentDecks,
+        currentDeck.id,
+        activeSlideRef.current,
+        settingsRef.current,
+      ));
+      void flushStorage();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') flush();
+    };
+    window.addEventListener('pagehide', flush);
+    window.addEventListener('beforeunload', flush);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      window.removeEventListener('beforeunload', flush);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [ready]);
 
   // ── settings / theme ───────────────────────────────────────────────────
   useEffect(() => {
@@ -183,6 +283,15 @@ export function useStudio(): StudioApi {
   const patchDeck = useCallback((deckId: string, fn: (deck: Deck) => Deck) => {
     setDecks((prev) => prev.map((item) => (item.id === deckId ? { ...fn(item), updatedAt: Date.now() } : item)));
   }, []);
+
+  /** Writes one exact state now, without waiting for the debounce. */
+  const persistNow = useCallback((
+    nextDecks: Deck[],
+    nextActiveDeckId: string,
+    nextActiveSlideId: string,
+  ): Promise<void> => setWorkspace(
+    makePersisted(nextDecks, nextActiveDeckId, nextActiveSlideId, settingsRef.current),
+  ), []);
 
   const selectDeck = useCallback((deckId: string) => {
     setActiveDeckId(deckId);
@@ -212,23 +321,34 @@ export function useStudio(): StudioApi {
   }, []);
 
   const deleteDeck = useCallback((deckId: string) => {
-    setDecks((prev) => {
-      const target = prev.find((item) => item.id === deckId);
-      target?.slides.forEach((item) => { void deleteStrokes(item.id); });
-      const rest = prev.filter((item) => item.id !== deckId);
-      if (rest.length === 0) {
-        const sample = createSampleDeck();
-        setActiveDeckId(sample.id);
-        setActiveSlideId(sample.slides[0].id);
-        return [sample];
-      }
-      if (deckId === activeDeckId) {
-        setActiveDeckId(rest[0].id);
-        setActiveSlideId(rest[0].slides[0]?.id ?? '');
-      }
-      return rest;
+    const current = decksRef.current;
+    const target = current.find((item) => item.id === deckId);
+    if (!target) return;
+    const removedIds = deckSlideIds(target);
+    const rest = current.filter((item) => item.id !== deckId);
+    const nextDecks = rest.length ? rest : [createSampleDeck()];
+    const nextDeck = nextDecks.find((item) => item.id === activeDeckRef.current) ?? nextDecks[0];
+    const nextSlide = nextDeck.slides.some((item) => item.id === activeSlideRef.current)
+      ? activeSlideRef.current
+      : nextDeck.slides[0]?.id ?? '';
+
+    setDecks(nextDecks);
+    setActiveDeckId(nextDeck.id);
+    setActiveSlideId(nextSlide);
+    setStrokes((prev) => {
+      if (!removedIds.some((id) => id in prev)) return prev;
+      const next = { ...prev };
+      for (const id of removedIds) delete next[id];
+      return next;
     });
-  }, [activeDeckId]);
+    for (const id of removedIds) delete savedStrokes.current[id];
+
+    // The workspace goes first: a deck must never disappear from storage while
+    // its ink is still listed under a deck that no longer exists. Then both the
+    // memory map and IndexedDB lose the strokes.
+    void persistNow(nextDecks, nextDeck.id, nextSlide)
+      .then(() => Promise.all(removedIds.map((id) => deleteStrokes(id))));
+  }, [persistNow]);
 
   const renameDeck = useCallback((title: string) => {
     if (!deck) return;
@@ -237,12 +357,25 @@ export function useStudio(): StudioApi {
 
   const restoreSample = useCallback(() => {
     const sample = createSampleDeck();
+    const previous = decksRef.current.find((item) => item.id === SAMPLE_DECK_ID);
+    const staleIds = previous ? deckSlideIds(previous) : [];
     // One sample deck at a time: restore replaces the previous copy instead of
-    // stacking a second deck with the same id.
-    setDecks((prev) => [sample, ...prev.filter((item) => item.id !== sample.id)]);
+    // stacking a second deck with the same id — and drops the ink that belonged
+    // to the copy being replaced.
+    const nextDecks = [sample, ...decksRef.current.filter((item) => item.id !== sample.id)];
+    setDecks(nextDecks);
     setActiveDeckId(sample.id);
     setActiveSlideId(sample.slides[0].id);
-  }, []);
+    setStrokes((prev) => {
+      if (!staleIds.length) return prev;
+      const next = { ...prev };
+      for (const id of staleIds) delete next[id];
+      return next;
+    });
+    for (const id of staleIds) delete savedStrokes.current[id];
+    void persistNow(nextDecks, sample.id, sample.slides[0].id)
+      .then(() => Promise.all(staleIds.map((id) => deleteStrokes(id))));
+  }, [persistNow]);
 
   const importFromMarkdown = useCallback((text: string, filename = '') => {
     const made = makeDeckFromImport(text, filename, settings.splitMode);
@@ -297,24 +430,30 @@ export function useStudio(): StudioApi {
   }, [deck, patchDeck]);
 
   const deleteSlide = useCallback((slideId: string) => {
-    if (!deck) return;
-    if (deck.slides.length <= 1) return;
-    patchDeck(deck.id, (item) => {
-      const index = item.slides.findIndex((entry) => entry.id === slideId);
-      const next = item.slides.filter((entry) => entry.id !== slideId);
-      if (slideId === activeSlideId) {
-        const fallback = next[Math.max(0, index - 1)] ?? next[0];
-        setActiveSlideId(fallback.id);
-      }
-      return { ...item, slides: next };
-    });
-    void deleteStrokes(slideId);
+    const current = currentDeck();
+    if (!current) return;
+    if (current.slides.length <= 1) return;
+    const index = current.slides.findIndex((entry) => entry.id === slideId);
+    if (index < 0) return;
+    const nextSlides = current.slides.filter((entry) => entry.id !== slideId);
+    const nextDecks = decksRef.current.map((item) =>
+      (item.id === current.id ? { ...item, slides: nextSlides, updatedAt: Date.now() } : item));
+    const nextSlide = slideId === activeSlideRef.current
+      ? (nextSlides[Math.max(0, index - 1)] ?? nextSlides[0]).id
+      : activeSlideRef.current;
+
+    setDecks(nextDecks);
+    setActiveSlideId(nextSlide);
     setStrokes((prev) => {
+      if (!(slideId in prev)) return prev;
       const next = { ...prev };
       delete next[slideId];
       return next;
     });
-  }, [deck, activeSlideId, patchDeck]);
+    delete savedStrokes.current[slideId];
+
+    void persistNow(nextDecks, current.id, nextSlide).then(() => deleteStrokes(slideId));
+  }, [currentDeck, persistNow]);
 
   const moveSlide = useCallback((slideId: string, delta: number) => {
     if (!deck) return;
@@ -348,11 +487,18 @@ export function useStudio(): StudioApi {
     patchDeck(deck.id, (item) => ({ ...item, summary: text }));
   }, [deck, patchDeck]);
 
-  const addStroke = useCallback((stroke: Stroke) => {
-    if (!slide) return;
-    const slideId = slide.id;
+  const addStrokeTo = useCallback((slideId: string, stroke: Stroke) => {
+    const exists = decksRef.current.some((item) => item.slides.some((entry) => entry.id === slideId));
+    // A slide deleted while the pen was down must not get its ink back as an
+    // orphan record.
+    if (!exists) return;
     setStrokes((prev) => ({ ...prev, [slideId]: [...(prev[slideId] ?? []), stroke] }));
-  }, [slide]);
+  }, []);
+
+  const addStroke = useCallback((stroke: Stroke) => {
+    const target = activeSlideRef.current;
+    if (target) addStrokeTo(target, stroke);
+  }, [addStrokeTo]);
 
   const undoStroke = useCallback(() => {
     if (!slide) return;
@@ -369,15 +515,44 @@ export function useStudio(): StudioApi {
     setStrokes((prev) => ({ ...prev, [slideId]: [] }));
   }, [slide]);
 
+  /**
+   * Replaces the whole room with a backup. Ink the backup does not carry is
+   * removed, and the workspace, the restored ink and those removals land in one
+   * transaction — so a refresh right afterwards shows exactly the restored
+   * state instead of old strokes under new decks.
+   */
   const replaceAll = useCallback((file: StudyFile) => {
-    setDecks(file.decks);
-    setStrokes(file.strokes ?? {});
-    setActiveDeckId(file.activeDeckId || file.decks[0].id);
-    setActiveSlideId(file.decks[0].slides[0]?.id ?? '');
-    for (const [slideId, list] of Object.entries(file.strokes ?? {})) {
-      savedStrokes.current[slideId] = JSON.stringify(list);
-      void saveStrokes(slideId, list);
+    const nextDecks = file.decks;
+    const nextStrokes = file.strokes ?? {};
+    const nextActiveDeck = nextDecks.find((item) => item.id === file.activeDeckId) ?? nextDecks[0];
+    const nextSlide = nextActiveDeck.slides[0]?.id ?? '';
+    const targetIds = new Set(nextDecks.flatMap((item) => deckSlideIds(item)));
+    const stale = [...new Set([...Object.keys(strokesRef.current), ...Object.keys(savedStrokes.current)])]
+      .filter((id) => !targetIds.has(id));
+
+    setDecks(nextDecks);
+    setStrokes(nextStrokes);
+    setActiveDeckId(nextActiveDeck.id);
+    setActiveSlideId(nextSlide);
+
+    const nextSaved: Record<string, string> = {};
+    for (const [slideId, list] of Object.entries(nextStrokes)) {
+      nextSaved[slideId] = JSON.stringify(list);
     }
+    savedStrokes.current = nextSaved;
+
+    void replaceWorkspace({
+      workspace: makePersisted(nextDecks, nextActiveDeck.id, nextSlide, settingsRef.current),
+      strokes: nextStrokes,
+      removeStrokeIds: stale,
+    }).then((ok) => {
+      if (ok) return;
+      // Storage refused the one-shot restore: let the normal save path retry
+      // rather than leaving the screen claiming the backup was written.
+      savedStrokes.current = {};
+      return Promise.all(Object.entries(nextStrokes).map(([slideId, list]) => saveStrokes(slideId, list)))
+        .then(() => undefined);
+    });
   }, []);
 
   const exportStudy = useCallback(() => {
@@ -400,6 +575,7 @@ export function useStudio(): StudioApi {
     strokes,
     slideStrokes: (slide && strokes[slide.id]) || [],
     settings,
+    storage,
     setSettings,
     selectDeck,
     selectSlide,
@@ -418,6 +594,7 @@ export function useStudio(): StudioApi {
     moveSlideTo,
     setSummary,
     addStroke,
+    addStrokeTo,
     undoStroke,
     clearInk,
     replaceAll,

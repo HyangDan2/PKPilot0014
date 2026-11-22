@@ -3,7 +3,8 @@ import { splitMarkdown } from '../src/lib/split';
 import { createDeck, createSlide } from '../src/lib/study';
 import {
   LEGACY_SAMPLE_MARKDOWN, SAMPLE_DECK_ID, SAMPLE_DECK_SUMMARY, SAMPLE_DECK_TITLE, SAMPLE_MARKDOWN,
-  SAMPLE_VERSION, createSampleDeck, sampleDeckSignature, shouldUpgradeSampleDeck, upgradeSampleDecks,
+  SAMPLE_VERSION, createSampleDeck, sampleBuildSignature, sampleDeckSignature, shouldUpgradeSampleDeck,
+  upgradeSampleDecks,
 } from '../src/lib/sample';
 import type { Deck, StrokesBySlide } from '../src/types/study';
 
@@ -129,6 +130,73 @@ describe('샘플 덱 버전 갱신 — 사용자 데이터 보호', () => {
       deck,
       storedVersion: 1,
       storedFingerprint: sampleDeckSignature(deck),
+      hasInk: false,
+    });
+    expect(upgraded).toBe(false);
+  });
+});
+
+describe('샘플 덱 fingerprint 분리 — 사용자 편집 보존', () => {
+  it('배포 원본과 편집본의 서명이 다르다', () => {
+    const shipped = createSampleDeck();
+    const edited = createSampleDeck();
+    edited.slides[1].note = '내가 정리한 메모';
+    expect(sampleDeckSignature(edited)).not.toBe(sampleDeckSignature(shipped));
+    expect(sampleBuildSignature()).toBe(sampleDeckSignature(shipped));
+  });
+
+  it('버전이 올라가도 사용자가 붙인 메모·학습 상태는 지우지 않는다', () => {
+    const edited = createSampleDeck();
+    edited.slides[0].note = '시험 전에 다시 보기';
+    edited.slides[2].status = 'done';
+
+    // The record was written by this build: copy signature differs from the
+    // shipped one, and the edit flag says so.
+    const result = upgradeSampleDecks([edited], {
+      version: SAMPLE_VERSION - 1,
+      fingerprint: sampleDeckSignature(edited),
+      buildFingerprint: sampleBuildSignature(),
+      edited: true,
+    }, {});
+
+    expect(result.upgraded).toBe(false);
+    expect(result.decks[0].slides[0].note).toBe('시험 전에 다시 보기');
+    expect(result.decks[0].slides[2].status).toBe('done');
+  });
+
+  it('배포 서명과 달라진 복사본은 기록에 편집 표시가 없어도 덮어쓰지 않는다', () => {
+    const edited = createSampleDeck();
+    edited.slides[4].note = '가림막 문제 3번 틀림';
+    const upgraded = shouldUpgradeSampleDeck({
+      deck: edited,
+      storedVersion: SAMPLE_VERSION - 1,
+      storedFingerprint: sampleDeckSignature(createSampleDeck()),
+      storedBuildFingerprint: sampleBuildSignature(),
+      hasInk: false,
+    });
+    expect(upgraded).toBe(false);
+  });
+
+  it('배포 원본 그대로인 이전 복사본은 새 빌드로 갱신한다', () => {
+    const stored = createSampleDeck();
+    const upgraded = shouldUpgradeSampleDeck({
+      deck: stored,
+      storedVersion: SAMPLE_VERSION - 1,
+      storedFingerprint: sampleDeckSignature(stored),
+      storedBuildFingerprint: sampleDeckSignature(stored),
+      hasInk: false,
+    });
+    expect(upgraded).toBe(true);
+  });
+
+  it('편집 표시가 있으면 내용이 원본과 같아도 갱신하지 않는다', () => {
+    const stored = createSampleDeck();
+    const upgraded = shouldUpgradeSampleDeck({
+      deck: stored,
+      storedVersion: SAMPLE_VERSION - 1,
+      storedFingerprint: sampleDeckSignature(stored),
+      storedBuildFingerprint: sampleDeckSignature(stored),
+      storedEdited: true,
       hasInk: false,
     });
     expect(upgraded).toBe(false);
