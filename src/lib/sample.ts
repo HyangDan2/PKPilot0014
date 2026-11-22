@@ -15,8 +15,11 @@ import LEGACY_SAMPLE_V1 from './sample-deck-v1.md?raw';
  */
 export const SAMPLE_DECK_ID = 'sample-saga-glitra';
 export const SAMPLE_DECK_TITLE = 'SlideDeck 시작 덱';
-/** Bump when the sample deck's content changes, so untouched copies refresh. */
-export const SAMPLE_VERSION = 2;
+/** Bump when the sample deck's content changes, so untouched copies refresh.
+ *  3 — the Sága Glitra → SlideDeck rename: copies stored at v2 carry the old
+ *  deck title, so they follow the current build even though their ids and
+ *  saved files stay compatible. */
+export const SAMPLE_VERSION = 3;
 
 export const SAMPLE_DECK_SUMMARY =
   '이 덱은 사용법입니다. 슬라이드마다 붙은 노트를 읽고, ==가림막==을 눌러 복습하세요. ' +

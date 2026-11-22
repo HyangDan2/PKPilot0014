@@ -43,8 +43,8 @@ describe('샘플 덱 — 첫 장 슬림화', () => {
     expect(deck.slides[4].markdown).toContain('==키워드==');
   });
 
-  it('샘플 마크다운은 v2이고 이전본과 다르다', () => {
-    expect(SAMPLE_VERSION).toBe(2);
+  it('샘플 마크다운은 v3이고 이전본과 다르다', () => {
+    expect(SAMPLE_VERSION).toBe(3);
     expect(SAMPLE_MARKDOWN).not.toBe(LEGACY_SAMPLE_MARKDOWN);
   });
 });
@@ -104,6 +104,22 @@ describe('샘플 덱 버전 갱신 — 사용자 데이터 보호', () => {
       hasInk: false,
     });
     expect(upgraded).toBe(false);
+  });
+
+  it('버전 2로 저장된 손대지 않은 샘플은 리네이밍 후 최신 샘플로 갱신된다', () => {
+    // A copy written by the pre-rename build: same id, old Sága Glitra title.
+    const stored = createSampleDeck();
+    stored.title = 'Sága Glitra 시작 덱';
+    stored.slides[0].title = 'Sága Glitra — 공부방 스튜디오';
+
+    const result = upgradeSampleDecks([stored], {
+      version: 2,
+      fingerprint: sampleDeckSignature(stored),
+    }, {});
+
+    expect(result.upgraded).toBe(true);
+    expect(result.decks[0].title).toBe(SAMPLE_DECK_TITLE);
+    expect(result.decks[0].title).not.toContain('Sága');
   });
 
   it('샘플이 아닌 덱은 버전이 낮아도 건드리지 않는다', () => {

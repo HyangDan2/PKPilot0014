@@ -7,9 +7,10 @@ import {
 } from '../lib/catalog';
 import { normalizeTags } from '../lib/tags';
 import {
-  IconClose, IconDeck, IconExternal, IconFile, IconMoon, IconPlus, IconRight, IconSearch, IconSun,
+  IconClose, IconDeck, IconFile, IconMoon, IconPlus, IconRight, IconSearch, IconSun,
   IconTag, IconUpload,
 } from './Icons';
+import { PortalMenu } from './PortalMenu';
 
 interface LandingProps {
   decks: Deck[];
@@ -74,8 +75,8 @@ export function Landing({
 
   return (
     <div className="landing-app">
-      {/* The same 56px bar as the studio, so the landing never loses the
-          Web-HQ lockup or the way back to the other HD2Lab apps. */}
+      {/* The same 56px bar as the studio: the HD2Lab lockup, the theme toggle
+          and the ⋮ portal menu every other HD2Lab app carries. */}
       <header className="topbar landing-top">
         <button
           type="button" className="brand" onClick={toTop}
@@ -99,13 +100,7 @@ export function Landing({
             {dark ? <IconSun size={17} /> : <IconMoon size={17} />}
           </button>
 
-          <span className="top-div" aria-hidden />
-          <a className="ext-link" href="https://hyangdan2.github.io/" target="_blank" rel="noopener noreferrer">
-            Web-HQ <IconExternal size={12} />
-          </a>
-          <a className="ext-link" href="https://hyangdan2.github.io/ApplicationHub/" target="_blank" rel="noopener noreferrer">
-            ApplicationHub <IconExternal size={12} />
-          </a>
+          <PortalMenu onHome={toTop} />
         </div>
       </header>
 
