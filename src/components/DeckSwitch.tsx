@@ -90,7 +90,7 @@ export function DeckSwitch({ studio, onRestoreSample, onToast }: Props) {
             onClick={() => { setOpen(false); onRestoreSample(); }}
           >
             <span className="pop-ic"><IconSpark size={14} /></span>
-            <span className="pop-text"><b>샘플 덱 복원</b><small>Sága Glitra 사용법 5장</small></span>
+            <span className="pop-text"><b>샘플 덱 복원</b><small>SlideDeck 사용법 5장</small></span>
           </button>
           <button
             type="button" role="menuitem" className="pop-item danger"

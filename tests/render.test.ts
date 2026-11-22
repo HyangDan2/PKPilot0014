@@ -45,7 +45,7 @@ describe('렌더 파이프라인', () => {
   it('turns masks into chips and strips raw HTML', () => {
     const { html, masks } = renderMarkdown('==핵심== 그리고 <script>alert(1)</script>');
     expect(masks).toEqual(['핵심']);
-    expect(html).toContain('class="glitra-mask"');
+    expect(html).toContain('class="slide-mask"');
     expect(html).not.toContain('<script>');
   });
 

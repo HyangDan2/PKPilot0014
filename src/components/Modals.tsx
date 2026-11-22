@@ -47,7 +47,7 @@ interface HelpModalProps {
 export function HelpModal({ onClose }: HelpModalProps) {
   return (
     <Modal
-      title="Sága Glitra 사용법"
+      title="SlideDeck 사용법"
       subtitle="가이드 · 단축키 · 마크다운 문법 — 필요한 항목만 골라 보세요."
       onClose={onClose}
       wide

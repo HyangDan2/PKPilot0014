@@ -14,7 +14,7 @@ import LEGACY_SAMPLE_V1 from './sample-deck-v1.md?raw';
  * markdown stays readable and unescaped.
  */
 export const SAMPLE_DECK_ID = 'sample-saga-glitra';
-export const SAMPLE_DECK_TITLE = 'Sága Glitra 시작 덱';
+export const SAMPLE_DECK_TITLE = 'SlideDeck 시작 덱';
 /** Bump when the sample deck's content changes, so untouched copies refresh. */
 export const SAMPLE_VERSION = 2;
 

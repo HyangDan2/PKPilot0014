@@ -31,7 +31,7 @@ describe('가림막 파서', () => {
 describe('칩 복원', () => {
   it('builds an escaped, revealed=false chip', () => {
     const html = restoreMasks('<p>%%SGMASK0%%</p>', ['<script>x</script>']);
-    expect(html).toContain('class="glitra-mask"');
+    expect(html).toContain('class="slide-mask"');
     expect(html).toContain('data-mask-id="0"');
     expect(html).toContain('data-revealed="false"');
     expect(html).toContain('&lt;script&gt;x&lt;/script&gt;');

@@ -24,7 +24,7 @@ interface Props {
 }
 
 /** Controls that own a drag/click of their own; a swipe must not start on them. */
-const SWIPE_BLOCKERS = 'button, a, input, textarea, select, [contenteditable], [role="textbox"], .glitra-mask, .code-block, .mermaid-block';
+const SWIPE_BLOCKERS = 'button, a, input, textarea, select, [contenteditable], [role="textbox"], .slide-mask, .code-block, .mermaid-block';
 
 export function SlideStage({ studio, onPresent, onToast, onToggleRail, onRestoreSample, keysEnabled = true }: Props) {
   const { deck, slide, settings, setSettings, updateSlide, toggleStatus, addStroke, undoStroke } = studio;

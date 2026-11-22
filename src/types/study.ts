@@ -70,7 +70,7 @@ export interface StudioSettings {
 export interface StudyFile {
   format: 'saga-glitra-study';
   version: 1;
-  app: 'Sága Glitra';
+  app: 'SlideDeck';
   exportedAt: string;
   activeDeckId: string;
   decks: Deck[];

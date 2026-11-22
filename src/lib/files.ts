@@ -19,7 +19,7 @@ export function downloadBytes(filename: string, bytes: Uint8Array, mime: string)
   saveBlob(filename, new Blob([copy.buffer], { type: mime }));
 }
 
-export function safeFilename(name: string, fallback = 'saga-glitra'): string {
+export function safeFilename(name: string, fallback = 'slidedeck'): string {
   const clean = name
     .replace(/[\\/:*?"<>|]+/g, ' ')
     .replace(/\s+/g, '-')

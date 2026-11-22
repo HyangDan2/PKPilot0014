@@ -54,9 +54,9 @@ export function restoreMasks(html: string, masks: string[]): string {
   let out = html;
   masks.forEach((mask, index) => {
     const chip =
-      `<span class="glitra-mask" role="button" tabindex="0" data-mask-id="${index}" data-revealed="false"` +
+      `<span class="slide-mask" role="button" tabindex="0" data-mask-id="${index}" data-revealed="false"` +
       ` aria-label="가림막 — 눌러서 공개" title="눌러서 공개 / 숨김">` +
-      `<span class="glitra-mask-ink">${escapeHtml(mask)}</span></span>`;
+      `<span class="slide-mask-ink">${escapeHtml(mask)}</span></span>`;
     out = out.split(`${TOKEN}${index}%%`).join(chip);
   });
   return out;

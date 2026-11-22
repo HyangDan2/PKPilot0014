@@ -48,7 +48,7 @@ describe('study.json 직렬화', () => {
 
   it('refuses non-JSON and foreign files', () => {
     expect(() => parseStudyFile('not json')).toThrow(/JSON/);
-    expect(() => parseStudyFile('{"format":"other","decks":[{"id":"1"}]}')).toThrow(/Sága Glitra/);
+    expect(() => parseStudyFile('{"format":"other","decks":[{"id":"1"}]}')).toThrow(/SlideDeck/);
     expect(() => parseStudyFile('{"decks":[]}')).toThrow(/덱이 없습니다/);
   });
 });

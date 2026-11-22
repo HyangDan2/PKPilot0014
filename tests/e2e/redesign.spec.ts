@@ -45,7 +45,7 @@ async function seedDecks(page: Page, count = 13) {
       }],
     };
   });
-  const file = { format: 'saga-glitra-study', version: 1, app: 'Sága Glitra', exportedAt: new Date().toISOString(), activeDeckId: decks[0].id, decks, strokes: {} };
+  const file = { format: 'saga-glitra-study', version: 1, app: 'SlideDeck', exportedAt: new Date().toISOString(), activeDeckId: decks[0].id, decks, strokes: {} };
   const dir = mkdtempSync(join(tmpdir(), 'saga-seed-'));
   const path = join(dir, 'seed.study.json');
   writeFileSync(path, JSON.stringify(file));

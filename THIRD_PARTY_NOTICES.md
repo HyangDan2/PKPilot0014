@@ -1,4 +1,4 @@
-# Third-Party Notices — PKPilot 0014 (Sága Glitra)
+# Third-Party Notices — PKPilot 0014 (SlideDeck)
 
 이 앱은 아래 소프트웨어와 HD2Lab 자체 자산을 사용합니다.
 
@@ -23,5 +23,5 @@
 | 자산 | 출처 | 라이선스 |
 | --- | --- | --- |
 | HD2Lab dual-skew 엠블럼 · Soft Iris / Navy & Lavender 테마 토큰 | HD2Lab Web-HQ | MIT |
-| `Sága Glitra` 사용법 샘플 덱 5장 · 앱 아이콘 · OG 카드 | HD2Lab | MIT |
+| `SlideDeck` 사용법 샘플 덱 5장 · 앱 아이콘 · OG 카드 | HD2Lab | MIT |
 | `.study.json` 학습 상태 포맷 · 슬라이드/노트 1:1 모델 | HD2Lab | MIT |

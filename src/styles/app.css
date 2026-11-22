@@ -1,5 +1,5 @@
 /* ─────────────────────────────────────────────────────────────────────────
-   HD2Lab · Sága Glitra — study-room studio
+   HD2Lab · SlideDeck — study-room studio
    Two HD2Lab tones: Soft Iris (light, the study default) and
    Navy & Lavender (dark). Everything below is token-driven.
    ───────────────────────────────────────────────────────────────────────── */
@@ -794,23 +794,23 @@ a { color: inherit; }
 }
 .math-error { font-family: var(--mono); color: var(--error); }
 
-.glitra-mask {
+.slide-mask {
   display: inline-block; position: relative; min-width: 3.1em; padding: 0.05em 0.42em; margin: 0 0.08em;
   border-radius: 6px; background: var(--surface-3); border: 1px dashed var(--accent-line);
   color: transparent; cursor: pointer; transition: background 0.15s ease, color 0.15s ease;
   box-decoration-break: clone; -webkit-box-decoration-break: clone;
 }
-.glitra-mask .glitra-mask-ink { color: transparent; text-shadow: none; }
-.glitra-mask::after {
+.slide-mask .slide-mask-ink { color: transparent; text-shadow: none; }
+.slide-mask::after {
   content: "가림"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
   font-family: var(--mono); font-size: 9px; font-weight: 600; letter-spacing: 0.14em; color: var(--accent);
 }
-.glitra-mask[data-revealed="true"] {
+.slide-mask[data-revealed="true"] {
   background: color-mix(in srgb, var(--accent) 18%, transparent);
   border-style: solid;
 }
-.glitra-mask[data-revealed="true"] .glitra-mask-ink { color: var(--ink); }
-.glitra-mask[data-revealed="true"]::after { content: none; }
+.slide-mask[data-revealed="true"] .slide-mask-ink { color: var(--ink); }
+.slide-mask[data-revealed="true"]::after { content: none; }
 
 .task-item { list-style: none; position: relative; padding-left: 1.5em; }
 .task-box {
@@ -1032,12 +1032,12 @@ a { color: inherit; }
   .print-md .code-copy { display: none; }
   .print-md .code-body { max-height: none; }
   .print-md .code-body code, .print-md .code-body code.hljs { color: #23203a; font-size: 8.4pt; }
-  .print-md .glitra-mask {
+  .print-md .slide-mask {
     background: #f1ecfe; border: 0.6pt dashed #a78bfa; color: #2a2738;
   }
-  .print-md .glitra-mask::after { content: none; }
-  .print-md .glitra-mask .glitra-mask-ink,
-  .print-md .glitra-mask[data-revealed="false"] .glitra-mask-ink { color: #2a2738; }
+  .print-md .slide-mask::after { content: none; }
+  .print-md .slide-mask .slide-mask-ink,
+  .print-md .slide-mask[data-revealed="false"] .slide-mask-ink { color: #2a2738; }
   .print-md .math-block { background: #f7f5fe; border-color: #e8e4f2; }
   .print-md .mermaid-block { background: #f7f5fe; }
   .print-md .mermaid-src { display: none; }

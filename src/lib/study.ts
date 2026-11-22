@@ -64,7 +64,7 @@ export function serializeStudy(input: {
   const file: StudyFile = {
     format: 'saga-glitra-study',
     version: 1,
-    app: 'Sága Glitra',
+    app: 'SlideDeck',
     exportedAt: new Date().toISOString(),
     activeDeckId: input.activeDeckId,
     // Older decks carry no `tags`; every save writes the field so the file
@@ -127,7 +127,7 @@ export function parseStudyFile(text: string): StudyFile {
   }
   if (!raw || typeof raw !== 'object') throw new Error('백업 파일의 형식이 올바르지 않습니다.');
   if (raw.format && raw.format !== 'saga-glitra-study') {
-    throw new Error('Sága Glitra 백업 파일(.study.json)이 아닙니다.');
+    throw new Error('SlideDeck 백업 파일(.study.json)이 아닙니다.');
   }
   if (!Array.isArray(raw.decks) || raw.decks.length === 0) {
     throw new Error('백업 파일에 덱이 없습니다.');
@@ -149,7 +149,7 @@ export function parseStudyFile(text: string): StudyFile {
   return {
     format: 'saga-glitra-study',
     version: 1,
-    app: 'Sága Glitra',
+    app: 'SlideDeck',
     exportedAt: typeof raw.exportedAt === 'string' ? raw.exportedAt : new Date().toISOString(),
     activeDeckId,
     decks,
