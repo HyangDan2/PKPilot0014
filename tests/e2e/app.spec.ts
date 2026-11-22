@@ -10,6 +10,24 @@ function watchConsole(page: Page): string[] {
   return errors;
 }
 
+/**
+ * Stops the running page from writing the workspace again, so a record seeded
+ * straight into IndexedDB survives the reload (the room flushes its own state
+ * on pagehide).
+ */
+async function freezeWorkspaceWrites(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const proto = IDBObjectStore.prototype;
+    const original = proto.put;
+    proto.put = function patched(this: IDBObjectStore, value: unknown, key?: IDBValidKey) {
+      if (this.name === 'workspace') {
+        return { onsuccess: null, onerror: null } as unknown as IDBRequest;
+      }
+      return original.call(this, value, key);
+    } as typeof original;
+  });
+}
+
 async function openLanding(page: Page) {
   await page.goto('/');
   await expect(page.getByTestId('landing')).toBeVisible();
@@ -369,14 +387,15 @@ test.describe('랜딩 · 강의 라이브러리', () => {
     expect(errors).toEqual([]);
   });
 
-  test('리네이밍 전에 저장된 샘플 덱은 새 이름으로 갱신되고, 수정한 덱은 그대로다', async ({ page }) => {
+  test('구버전 기록에서 수정한 샘플 덱은 리네이밍 뒤에도 그대로다', async ({ page }) => {
     const errors = watchConsole(page);
     await openLanding(page);
     // Let the workspace settle into IndexedDB before rewriting it.
     await page.waitForTimeout(900);
 
-    // Put the workspace back the way the old build left it: the sample deck
-    // stored at version 2, still carrying its Sága Glitra title.
+    // The record an old build left: version 2, the Sága Glitra title, and its
+    // own signature in `sampleDeckFingerprint` — which matches every copy,
+    // edited or not. The note is what the person added.
     const seeded = await page.evaluate(() => new Promise<string>((resolve) => {
       const done = (note: string) => resolve(note);
       const request = indexedDB.open('saga-glitra', 1);
@@ -392,7 +411,11 @@ test.describe('랜딩 · 강의 라이브러리', () => {
           const saved = get.result;
           if (!saved?.decks?.length) { done('empty'); return; }
           saved.decks[0].title = 'Sága Glitra 시작 덱';
+          saved.decks[0].slides[0].note = '내가 고친 메모';
           saved.sampleDeckVersion = 2;
+          // Fields this build writes did not exist yet in the old record.
+          delete saved.sampleDeckBuildFingerprint;
+          delete saved.sampleDeckEdited;
           saved.sampleDeckFingerprint = JSON.stringify([
             saved.decks[0].title,
             saved.decks[0].summary,
@@ -406,12 +429,19 @@ test.describe('랜딩 · 강의 라이브러리', () => {
       };
     }));
     expect(seeded).toBe('ok');
+    await freezeWorkspaceWrites(page);
 
     await page.reload();
     await expect(page.getByTestId('landing')).toBeVisible();
-    await expect(page.locator('.hero-recent')).toContainText('SlideDeck 시작 덱');
-    await expect(page.getByTestId('deck-card-sample-saga-glitra')).toContainText('SlideDeck 시작 덱');
-    await expect(page.getByTestId('deck-card-sample-saga-glitra')).not.toContainText('Sága');
+    await expect(page.getByTestId('deck-card-sample-saga-glitra')).toContainText('Sága Glitra 시작 덱');
+    await page.getByTestId('deck-card-sample-saga-glitra').click();
+    await expect(page.getByTestId('notepad')).toBeVisible();
+    const drawer = page.getByTestId('note-drawer-toggle');
+    if (await drawer.isVisible() && (await drawer.getAttribute('aria-expanded')) !== 'true') {
+      await drawer.click();
+    }
+    await page.locator('.note-head').getByRole('tab', { name: '노트 편집' }).click();
+    expect(await page.getByTestId('note-input').inputValue()).toBe('내가 고친 메모');
 
     expect(errors).toEqual([]);
   });

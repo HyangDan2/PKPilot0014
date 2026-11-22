@@ -3,8 +3,8 @@ import { splitMarkdown } from '../src/lib/split';
 import { createDeck, createSlide } from '../src/lib/study';
 import {
   LEGACY_SAMPLE_MARKDOWN, SAMPLE_DECK_ID, SAMPLE_DECK_SUMMARY, SAMPLE_DECK_TITLE, SAMPLE_MARKDOWN,
-  SAMPLE_VERSION, createSampleDeck, sampleBuildSignature, sampleDeckSignature, shouldUpgradeSampleDeck,
-  upgradeSampleDecks,
+  SAMPLE_V2_MARKDOWN, SAMPLE_VERSION, createSampleDeck, sampleBuildSignature, sampleDeckSignature,
+  shouldUpgradeSampleDeck, upgradeSampleDecks,
 } from '../src/lib/sample';
 import type { Deck, StrokesBySlide } from '../src/types/study';
 
@@ -13,6 +13,16 @@ function legacyDeck(): Deck {
     .map((chunk) => createSlide(chunk.markdown, chunk.note, chunk.title));
   const deck = createDeck(SAMPLE_DECK_TITLE, slides);
   deck.id = 'deck_legacy';
+  deck.summary = SAMPLE_DECK_SUMMARY;
+  return deck;
+}
+
+/** The deck build 2 shipped: the Sága Glitra copy, before the rename. */
+function v2Deck(): Deck {
+  const slides = splitMarkdown(SAMPLE_V2_MARKDOWN, 'hr')
+    .map((chunk) => createSlide(chunk.markdown, chunk.note, chunk.title));
+  const deck = createDeck('Sága Glitra 시작 덱', slides);
+  deck.id = SAMPLE_DECK_ID;
   deck.summary = SAMPLE_DECK_SUMMARY;
   return deck;
 }
@@ -84,7 +94,7 @@ describe('샘플 덱 버전 갱신 — 사용자 데이터 보호', () => {
     expect(result.upgraded).toBe(false);
   });
 
-  it('버전이 낮고 내용이 그대로면 갱신한다', () => {
+  it('버전이 낮아도 내용이 지금 배포본과 같으면 다시 쓰지 않는다', () => {
     const deck = createSampleDeck();
     const upgraded = shouldUpgradeSampleDeck({
       deck,
@@ -92,7 +102,9 @@ describe('샘플 덱 버전 갱신 — 사용자 데이터 보호', () => {
       storedFingerprint: sampleDeckSignature(deck),
       hasInk: false,
     });
-    expect(upgraded).toBe(true);
+    // Nothing to refresh: the copy already carries this build's content, and
+    // the record's own signature is no proof that it was never edited.
+    expect(upgraded).toBe(false);
   });
 
   it('버전이 낮아도 내용 서명이 다르면 갱신하지 않는다', () => {
@@ -108,10 +120,9 @@ describe('샘플 덱 버전 갱신 — 사용자 데이터 보호', () => {
   });
 
   it('버전 2로 저장된 손대지 않은 샘플은 리네이밍 후 최신 샘플로 갱신된다', () => {
-    // A copy written by the pre-rename build: same id, old Sága Glitra title.
-    const stored = createSampleDeck();
-    stored.title = 'Sága Glitra 시작 덱';
-    stored.slides[0].title = 'Sága Glitra — 공부방 스튜디오';
+    // A copy the pre-rename build actually shipped: Sága Glitra content, no
+    // edits, no ink.
+    const stored = v2Deck();
 
     const result = upgradeSampleDecks([stored], {
       version: 2,
@@ -121,6 +132,37 @@ describe('샘플 덱 버전 갱신 — 사용자 데이터 보호', () => {
     expect(result.upgraded).toBe(true);
     expect(result.decks[0].title).toBe(SAMPLE_DECK_TITLE);
     expect(result.decks[0].title).not.toContain('Sága');
+  });
+
+  it('구버전 기록의 자기 서명이 같아도 편집한 사본은 덮어쓰지 않는다', () => {
+    // This is the shape an old build wrote: the copy's own signature in
+    // `sampleDeckFingerprint`, no shipped signature beside it. Matching it
+    // used to be read as "untouched" and the note below was lost.
+    const stored = v2Deck();
+    stored.slides[0].note = '시험 전에 다시 보기';
+    stored.slides[2].status = 'done';
+
+    const result = upgradeSampleDecks([stored], {
+      version: 2,
+      fingerprint: sampleDeckSignature(stored),
+    }, {});
+
+    expect(result.upgraded).toBe(false);
+    expect(result.decks[0].title).toBe('Sága Glitra 시작 덱');
+    expect(result.decks[0].slides[0].note).toBe('시험 전에 다시 보기');
+    expect(result.decks[0].slides[2].status).toBe('done');
+  });
+
+  it('구버전 기록이라도 배포본과 한 글자 다르면 그대로 둔다', () => {
+    const stored = v2Deck();
+    stored.slides[1].markdown += '\n\n내가 덧붙인 줄';
+
+    expect(shouldUpgradeSampleDeck({
+      deck: stored,
+      storedVersion: 2,
+      storedFingerprint: sampleDeckSignature(stored),
+      hasInk: false,
+    })).toBe(false);
   });
 
   it('샘플이 아닌 덱은 버전이 낮아도 건드리지 않는다', () => {

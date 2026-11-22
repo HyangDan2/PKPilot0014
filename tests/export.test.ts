@@ -3,7 +3,8 @@ import { strFromU8, unzipSync } from 'fflate';
 import {
   buildExportFiles, buildExportZip, deckNotesMarkdown, exportBaseName, exportFilename,
 } from '../src/lib/exportBundle';
-import { parseStudyFile } from '../src/lib/study';
+import { deckToMarkdown, importMarkdown, parseStudyFile } from '../src/lib/study';
+import { splitMarkdown } from '../src/lib/split';
 import type { Deck, StrokesBySlide } from '../src/types/study';
 
 function deck(): Deck {
@@ -31,6 +32,44 @@ const bundleInput = {
   activeDeckId: 'deck_test',
   strokes,
 };
+
+describe('합본 주석 노트 — 왕복이 깨지는 문자', () => {
+  const tricky = [
+    '구분선을 적어 둔다\n\n---\n\n아래는 코드',
+    '```ts\nconst a = 1;\n---\n```\n코드펜스 안의 ---',
+    '주석을 닫는 글자 --> 를 노트에 적었다',
+    '여는 글자 <!-- 도 적었다',
+    '보통 노트\n둘째 줄',
+  ];
+
+  for (const note of tricky) {
+    it(`노트 «${note.split('\n')[0]}» 는 합본으로 내보내 다시 가져와도 그대로다`, () => {
+      const source = deck();
+      source.slides = [
+        { ...source.slides[0], note },
+        { ...source.slides[1], note: '둘째 장 노트' },
+      ];
+
+      const md = deckToMarkdown(source, 'comment');
+      // The note stays inside one slide: a `---` typed in a note is not a
+      // slide break, and a fence there does not swallow the break either.
+      expect(splitMarkdown(md, 'hr')).toHaveLength(2);
+
+      const back = importMarkdown(md, 'hr');
+      expect(back.slides).toHaveLength(2);
+      expect(back.slides[0].note).toBe(note);
+      expect(back.slides[1].note).toBe('둘째 장 노트');
+      expect(back.slides[0].markdown).toBe(source.slides[0].markdown);
+      expect(back.slides[1].markdown).toBe(source.slides[1].markdown);
+    });
+  }
+
+  it('평범한 노트는 읽을 수 있는 주석으로 남는다', () => {
+    const source = deck();
+    const md = deckToMarkdown(source, 'comment');
+    expect(md).toContain('<!-- note:\n첫 노트');
+  });
+});
 
 describe('메모만 내보내기', () => {
   it('writes one section per slide with the deck summary at the end', () => {

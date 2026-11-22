@@ -168,7 +168,12 @@ export function DeckRail({ studio, onToast, onClose, drawerOpen = false }: Props
                   <button
                     type="button"
                     className="danger"
-                    onClick={() => { deleteSlide(item.id); onToast('슬라이드를 삭제했습니다'); }}
+                    onClick={() => {
+                      const target = item.id;
+                      void deleteSlide(target).then((ok) => {
+                        onToast(ok ? '슬라이드를 삭제했습니다' : '슬라이드를 삭제하지 못했습니다 — 저장소 오류');
+                      });
+                    }}
                     disabled={deck.slides.length <= 1}
                     title={deck.slides.length <= 1 ? '마지막 슬라이드는 지울 수 없습니다' : '삭제'}
                     aria-label="슬라이드 삭제"
