@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { StudioApi } from '../store/studio';
+import { summarizeSave } from '../lib/saveStatus';
 import {
   IconCode, IconDots, IconDownload, IconEdit, IconExternal, IconHelp, IconHome, IconMoon, IconPrinter, IconSun,
   IconUpload,
@@ -57,6 +58,29 @@ export function Header({
         <span className="brand-app">SlideDeck</span>
         <span className="brand-badge">STUDY</span>
       </button>
+
+      {(() => {
+        const summary = summarizeSave(studio.saveState, {
+          paused: studio.storageReadFailed,
+          conflict: Boolean(studio.conflict),
+        });
+        // The one line that says whether the work on screen is on disk. The
+        // deck and the ink are written by different paths, so the chip reports
+        // the worse of the two; a paused room or a conflict outranks both.
+        return (
+          <span
+            className="save-chip"
+            data-testid="save-status"
+            data-state={summary.phase}
+            role="status"
+            aria-live="polite"
+            title={`저장 상태 — ${summary.label}`}
+          >
+            <span className="save-dot" aria-hidden />
+            <span className="save-text">{summary.label}</span>
+          </span>
+        );
+      })()}
 
       <div className="topbar-actions" ref={wrapRef}>
         <button
