@@ -369,6 +369,87 @@ test.describe('랜딩 · 강의 라이브러리', () => {
     expect(errors).toEqual([]);
   });
 
+  test('리네이밍 전에 저장된 샘플 덱은 새 이름으로 갱신되고, 수정한 덱은 그대로다', async ({ page }) => {
+    const errors = watchConsole(page);
+    await openLanding(page);
+    // Let the workspace settle into IndexedDB before rewriting it.
+    await page.waitForTimeout(900);
+
+    // Put the workspace back the way the old build left it: the sample deck
+    // stored at version 2, still carrying its Sága Glitra title.
+    const seeded = await page.evaluate(() => new Promise<string>((resolve) => {
+      const done = (note: string) => resolve(note);
+      const request = indexedDB.open('saga-glitra', 1);
+      request.onerror = () => done(`open: ${request.error}`);
+      request.onblocked = () => done('blocked');
+      request.onsuccess = () => {
+        const db = request.result;
+        const tx = db.transaction('workspace', 'readwrite');
+        const store = tx.objectStore('workspace');
+        const get = store.get('current');
+        get.onerror = () => done(`get: ${get.error}`);
+        get.onsuccess = () => {
+          const saved = get.result;
+          if (!saved?.decks?.length) { done('empty'); return; }
+          saved.decks[0].title = 'Sága Glitra 시작 덱';
+          saved.sampleDeckVersion = 2;
+          saved.sampleDeckFingerprint = JSON.stringify([
+            saved.decks[0].title,
+            saved.decks[0].summary,
+            saved.decks[0].slides.map((slide: { title: string; markdown: string; note: string; status: string }) => [slide.title, slide.markdown, slide.note, slide.status]),
+          ]);
+          store.put(saved, 'current');
+        };
+        tx.oncomplete = () => { db.close(); done('ok'); };
+        tx.onerror = () => done(`tx: ${tx.error}`);
+        tx.onabort = () => done('abort');
+      };
+    }));
+    expect(seeded).toBe('ok');
+
+    await page.reload();
+    await expect(page.getByTestId('landing')).toBeVisible();
+    await expect(page.locator('.hero-recent')).toContainText('SlideDeck 시작 덱');
+    await expect(page.getByTestId('deck-card-sample-saga-glitra')).toContainText('SlideDeck 시작 덱');
+    await expect(page.getByTestId('deck-card-sample-saga-glitra')).not.toContainText('Sága');
+
+    expect(errors).toEqual([]);
+  });
+
+  test('랜딩 탑메뉴에 ⋮ 포털 메뉴가 있고 한 화면 안에서 열린다', async ({ page }) => {
+    const errors = watchConsole(page);
+    await openLanding(page);
+
+    const viewport = page.viewportSize()!;
+    const menu = page.getByTestId('portal-menu');
+    await expect(menu).toBeVisible();
+    const box = await menu.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width + 0.5);
+
+    // 홈 · Web-HQ · ApplicationHub · GitHub 저장소
+    await menu.click();
+    const panel = page.getByTestId('portal-panel');
+    await expect(panel).toBeVisible();
+    await expect(panel.getByRole('menuitem')).toHaveCount(4);
+    await expect(panel).toContainText('HD2Lab Web-HQ');
+    await expect(panel).toContainText('ApplicationHub');
+    await expect(panel.getByRole('menuitem').last()).toHaveAttribute(
+      'href', 'https://github.com/HyangDan2/PKPilot0014',
+    );
+
+    const panelBox = await panel.boundingBox();
+    expect(panelBox!.x).toBeGreaterThanOrEqual(0);
+    expect(panelBox!.x + panelBox!.width).toBeLessThanOrEqual(viewport.width + 0.5);
+
+    // 화면 밖이 아니면 어디서든 Escape로 닫힌다.
+    await page.keyboard.press('Escape');
+    await expect(panel).toHaveCount(0);
+
+    expect(errors).toEqual([]);
+  });
+
   test('랜딩의 테마 전환이 스튜디오까지 이어진다', async ({ page }) => {
     const errors = watchConsole(page);
     await openLanding(page);

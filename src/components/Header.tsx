@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { StudioApi } from '../store/studio';
 import {
-  IconDots, IconDownload, IconEdit, IconExternal, IconHelp, IconHome, IconMoon, IconPrinter, IconSun,
+  IconCode, IconDots, IconDownload, IconEdit, IconExternal, IconHelp, IconHome, IconMoon, IconPrinter, IconSun,
   IconUpload,
 } from './Icons';
 
@@ -148,6 +148,10 @@ export function Header({
               <a className="pop-item" role="menuitem" href="https://hyangdan2.github.io/ApplicationHub/" target="_blank" rel="noopener noreferrer">
                 <span className="pop-ic"><IconExternal size={14} /></span>
                 <span className="pop-text"><b>ApplicationHub</b><small>Apps Catalog</small></span>
+              </a>
+              <a className="pop-item" role="menuitem" href="https://github.com/HyangDan2/PKPilot0014" target="_blank" rel="noopener noreferrer">
+                <span className="pop-ic"><IconCode size={14} /></span>
+                <span className="pop-text"><b>GitHub 저장소</b><small>Source</small></span>
               </a>
             </div>
           )}

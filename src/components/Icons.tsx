@@ -27,6 +27,10 @@ export const IconDeck = (p: IconProps) => (
   <Svg {...p}><path d="M4 7.5 12 3l8 4.5-8 4.5-8-4.5Z" /><path d="M4 12.5 12 17l8-4.5" /><path d="M4 17.2 12 21.6l8-4.4" /></Svg>
 );
 export const IconPlus = (p: IconProps) => (<Svg {...p}><path d="M12 5v14M5 12h14" /></Svg>);
+export const IconApps = (p: IconProps) => (
+  <Svg {...p}><rect x="4" y="4" width="6.4" height="6.4" rx="1.6" /><rect x="13.6" y="4" width="6.4" height="6.4" rx="1.6" /><rect x="4" y="13.6" width="6.4" height="6.4" rx="1.6" /><rect x="13.6" y="13.6" width="6.4" height="6.4" rx="1.6" /></Svg>
+);
+export const IconCode = (p: IconProps) => (<Svg {...p}><path d="m9 8-4 4 4 4M15 8l4 4-4 4" /></Svg>);
 export const IconCopy = (p: IconProps) => (
   <Svg {...p}><rect x="9" y="9" width="11" height="11" rx="2.2" /><path d="M15 5.6A2.6 2.6 0 0 0 12.4 3H6.6A2.6 2.6 0 0 0 4 5.6v5.8A2.6 2.6 0 0 0 6.6 14" /></Svg>
 );
