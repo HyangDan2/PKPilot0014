@@ -156,6 +156,21 @@ export default function App() {
     }
   };
 
+  const retrySave = async () => {
+    const ok = await studio.retrySave();
+    notify(ok ? '다시 저장했습니다' : '아직 저장하지 못했습니다 — 공간을 비운 뒤 다시 시도해 주세요');
+  };
+
+  const keepLocalConflict = async () => {
+    const ok = await studio.resolveConflict('local');
+    notify(ok ? '이 탭의 내용으로 저장했습니다' : '저장하지 못했습니다 — 잠시 뒤 다시 시도해 주세요');
+  };
+
+  const loadStoredConflict = async () => {
+    const ok = await studio.resolveConflict('stored');
+    notify(ok ? '저장본을 불러왔습니다' : '저장본을 불러오지 못했습니다');
+  };
+
   return (
     <>
       {storageNotice && storageNotice.key !== dismissedNotice && (
@@ -174,6 +189,16 @@ export default function App() {
               다시 읽기
             </button>
           )}
+          {(storageNotice.key === 'quota' || storageNotice.key === 'write') && (
+            <button
+              type="button"
+              className="storage-notice-action"
+              onClick={() => { void retrySave(); }}
+              data-testid="save-retry"
+            >
+              다시 시도
+            </button>
+          )}
           <button
             type="button"
             className="storage-notice-close"
@@ -182,6 +207,35 @@ export default function App() {
             data-testid="storage-notice-close"
           >
             닫기
+          </button>
+        </div>
+      )}
+
+      {studio.conflict && (
+        <div className="storage-notice error conflict-notice" role="alert" data-testid="conflict-notice">
+          <div className="storage-notice-text">
+            <b>다른 탭에서 먼저 저장했습니다</b>
+            <span>
+              {studio.conflict.area === 'strokes'
+                ? `‘${studio.conflict.title}’ 슬라이드의 필기가 다른 탭에서 바뀌었습니다 — 이 탭의 필기는 아직 저장되지 않았습니다. 어느 쪽을 남길지 골라 주세요.`
+                : '이 탭의 저장본이 다른 탭의 최신 저장본과 겹칩니다 — 덮어쓰지 않고 저장을 멈췄습니다. 어느 쪽을 남길지 골라 주세요.'}
+            </span>
+          </div>
+          <button
+            type="button"
+            className="storage-notice-action"
+            onClick={() => { void keepLocalConflict(); }}
+            data-testid="conflict-keep-local"
+          >
+            이 탭 내용 저장
+          </button>
+          <button
+            type="button"
+            className="storage-notice-action"
+            onClick={() => { void loadStoredConflict(); }}
+            data-testid="conflict-load-stored"
+          >
+            저장본 불러오기
           </button>
         </div>
       )}

@@ -5,8 +5,9 @@ import 'fake-indexeddb/auto';
 import { IDBFactory } from 'fake-indexeddb';
 import {
   __resetMemoryStore, __resetConnection, __setStorageErrorForTest, classifyStorageError, commitWorkspace,
-  flushStorage, getStrokes, getWorkspace, pendingWritesCount, readWorkspace, replaceWorkspace,
-  setStrokes, setWorkspace, storageStatus, subscribeStorage,
+  flushStorage, getStrokes, getWorkspace, loadAllStrokes, pendingWritesCount, readStrokes, readWorkspace,
+  readWorkspaceRevision, replaceWorkspace, setStrokeRevision, setStrokes, setWorkspace,
+  setWorkspaceRevision, storageStatus, subscribeStorage,
 } from '../src/lib/db';
 import { storageNoticeFor } from '../src/lib/storageNotice';
 
@@ -343,4 +344,147 @@ function restorePrototypes(): void {
   Object.defineProperty(IDBObjectStore.prototype, 'put', { configurable: true, writable: true, value: originalPut });
   Object.defineProperty(IDBObjectStore.prototype, 'delete', { configurable: true, writable: true, value: originalDelete });
   Object.defineProperty(IDBObjectStore.prototype, 'get', { configurable: true, writable: true, value: originalGet });
+}
+
+// ── revisions: two tabs, one record ──────────────────────────────────────
+
+describe('revision이 있는 저장 — 다른 탭의 최신 저장을 덮어쓰지 않는다', () => {
+  beforeEach(() => {
+    Object.defineProperty(globalThis, 'indexedDB', {
+      configurable: true,
+      writable: true,
+      value: new IDBFactory(),
+    });
+    __resetMemoryStore();
+    __resetConnection();
+  });
+
+  afterEach(() => {
+    restorePrototypes();
+    __setStorageErrorForTest(null);
+  });
+
+  it('워크스페이스는 저장된 revision과 다르면 쓰지 않고 알린다', async () => {
+    const first = await setWorkspaceRevision({ version: 1, marker: 'first' }, 0);
+    expect(first.ok).toBe(true);
+    expect(first.revision).toBe(1);
+
+    // A second tab still holds revision 0 — its copy must not land.
+    const refused = await setWorkspaceRevision({ version: 1, marker: 'stale' }, 0);
+    expect(refused.ok).toBe(false);
+    expect(refused.conflict).toBe(true);
+    expect(refused.revision).toBe(1);
+    expect(await getWorkspace<{ marker: string }>()).toEqual({ version: 1, marker: 'first' });
+
+    // Its own next write goes through with the revision it was told about.
+    const kept = await setWorkspaceRevision({ version: 1, marker: 'stale' }, refused.revision);
+    expect(kept.ok).toBe(true);
+    expect(await getWorkspace<{ marker: string }>()).toEqual({ version: 1, marker: 'stale' });
+  });
+
+  it('저장된 워크스페이스 레코드의 모양은 그대로다(revision은 옆 키)', async () => {
+    await setWorkspaceRevision({ version: 1, decks: [], settings: { theme: 'light' } }, 0);
+    const record = await pageWorkspaceRecord();
+    expect(Object.keys(record).sort()).toEqual(['decks', 'settings', 'version']);
+    expect(await readWorkspaceRevision()).toBe(1);
+  });
+
+  it('필기 기록도 revision이 다르면 다른 탭의 목록을 덮어쓰지 않는다', async () => {
+    await setStrokes('sl_a', [{ id: 'mine', strokes: 1 }]);
+    const stored = await readStrokes('sl_a');
+    expect(stored.ok && stored.record.revision).toBe(1);
+
+    const refused = await setStrokeRevision('sl_a', [{ id: 'other', strokes: 9 }], 0);
+    expect(refused.ok).toBe(false);
+    expect(refused.conflict).toBe(true);
+    expect(await getStrokes('sl_a')).toEqual([{ id: 'mine', strokes: 1 }]);
+
+    const kept = await setStrokeRevision('sl_a', [{ id: 'other', strokes: 9 }], refused.revision);
+    expect(kept.ok).toBe(true);
+    expect(await getStrokes('sl_a')).toEqual([{ id: 'other', strokes: 9 }]);
+  });
+
+  it('revision 이전에 쓰인 배열 기록도 읽고, 다음 쓰기에서 revision을 붙인다', async () => {
+    // An older build wrote the bare array under the slide id.
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('saga-glitra', 1);
+      request.onerror = () => reject(request.error);
+      request.onupgradeneeded = () => {
+        const opened = request.result;
+        if (!opened.objectStoreNames.contains('workspace')) opened.createObjectStore('workspace');
+        if (!opened.objectStoreNames.contains('strokes')) opened.createObjectStore('strokes');
+      };
+      request.onsuccess = () => resolve(request.result);
+    });
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction('strokes', 'readwrite');
+      tx.objectStore('strokes').put([{ id: 'legacy' }], 'sl_legacy');
+      tx.oncomplete = () => { db.close(); resolve(); };
+      tx.onerror = () => { db.close(); reject(tx.error); };
+    });
+
+    const read = await readStrokes('sl_legacy');
+    expect(read.ok).toBe(true);
+    expect(read.ok && read.record.revision).toBe(0);
+    expect(await getStrokes('sl_legacy')).toEqual([{ id: 'legacy' }]);
+
+    const written = await setStrokeRevision('sl_legacy', [{ id: 'legacy' }, { id: 'new' }], 0);
+    expect(written.ok).toBe(true);
+    expect(written.revision).toBe(1);
+    expect(await getStrokes('sl_legacy')).toEqual([{ id: 'legacy' }, { id: 'new' }]);
+  });
+});
+
+describe('loadAllStrokes — 읽기 실패와 데이터 부재를 구분한다', () => {
+  beforeEach(() => {
+    Object.defineProperty(globalThis, 'indexedDB', {
+      configurable: true,
+      writable: true,
+      value: new IDBFactory(),
+    });
+    __resetMemoryStore();
+    __resetConnection();
+  });
+
+  afterEach(() => {
+    restorePrototypes();
+    __setStorageErrorForTest(null);
+  });
+
+  it('필기가 없는 슬라이드는 성공한 빈 결과다', async () => {
+    await setStrokes('sl_a', [{ id: 'a' }]);
+    const read = await loadAllStrokes<{ id: string }>(['sl_a', 'sl_empty']);
+    expect(read.ok).toBe(true);
+    expect(read.ok && read.strokes).toEqual({ sl_a: [{ id: 'a' }] });
+    expect(read.ok && read.revisions.sl_empty).toBe(0);
+  });
+
+  it('한 슬라이드라도 읽지 못하면 전체를 실패로 돌려준다', async () => {
+    await setStrokes('sl_a', [{ id: 'a' }]);
+    await setStrokes('sl_b', [{ id: 'b' }]);
+
+    patchStore('get', function patched(this: IDBObjectStore, ...args: Parameters<IDBObjectStore['get']>) {
+      if (this.name === 'strokes' && args[0] === 'sl_b') throw new Error('read failed');
+      return originalGet.apply(this, args);
+    });
+
+    const read = await loadAllStrokes(['sl_a', 'sl_b']);
+    expect(read.ok).toBe(false);
+    expect(read.ok === false && read.slideIds).toEqual(['sl_b']);
+    expect(storageStatus().error).toBe('read');
+  });
+});
+
+/** The raw workspace record, without going through the read helpers. */
+async function pageWorkspaceRecord(): Promise<Record<string, unknown>> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('saga-glitra', 1);
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const db = request.result;
+      const get = db.transaction('workspace', 'readonly').objectStore('workspace').get('current');
+      get.onsuccess = () => { db.close(); resolve(get.result as Record<string, unknown>); };
+      get.onerror = () => { db.close(); reject(get.error); };
+    };
+  });
 }

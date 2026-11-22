@@ -24,6 +24,9 @@ const DB_VERSION = 1;
 const WORKSPACE = 'workspace';
 const STROKES = 'strokes';
 const WORKSPACE_KEY = 'current';
+// The revision rides beside the record instead of inside it, so the stored
+// workspace keeps exactly the shape older builds (and .study.json) use.
+const REVISION_KEY = 'workspace:revision';
 const STROKE_PREFIX = `${STROKES}:`;
 
 export type StorageErrorKind = 'quota' | 'unavailable' | 'write' | 'read';
@@ -45,8 +48,53 @@ export interface StorageStatus {
 
 /** The outcome of a workspace read: empty and unreadable are different facts. */
 export type WorkspaceRead<T> =
-  | { ok: true; value: T | undefined }
+  | { ok: true; value: T | undefined; revision: number }
   | { ok: false; error: StorageErrorKind };
+
+/**
+ * The outcome of a write that carries a revision. When another writer has
+ * already moved the record on, the write is refused (`conflict`) instead of
+ * quietly replacing that writer's work — the caller decides with the person.
+ */
+export interface RevisionResult {
+  ok: boolean;
+  /** The revision now in the store: the new one after a write, the other writer's on a conflict. */
+  revision: number;
+  conflict?: boolean;
+  error?: StorageErrorKind;
+}
+
+/** One slide's ink record, with the revision that guards it. */
+export interface StrokeRecord<T> {
+  revision: number;
+  strokes: T[];
+}
+
+/**
+ * Older builds stored the bare stroke array under the slide id; both shapes
+ * read the same way, so a record written before revisions existed still opens.
+ */
+export function normalizeStrokeRecord<T>(value: unknown): StrokeRecord<T> {
+  if (Array.isArray(value)) return { revision: 0, strokes: value as T[] };
+  const named = value as { revision?: unknown; strokes?: unknown } | null;
+  if (named && Array.isArray(named.strokes)) {
+    const revision = typeof named.revision === 'number' && Number.isFinite(named.revision) ? named.revision : 0;
+    return { revision, strokes: named.strokes as T[] };
+  }
+  return { revision: 0, strokes: [] };
+}
+
+/** The revision the memory fallback holds (0 before any write). */
+function memoryRevision(): number {
+  const value = memory.get(REVISION_KEY);
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+}
+
+function reportAndClassify(error: unknown, area: StorageArea): StorageErrorKind {
+  const kind = classifyStorageError(error);
+  reportStorageError(kind, area, error instanceof Error ? error.message : String(error));
+  return kind;
+}
 
 const memory = new Map<string, unknown>();
 
@@ -83,12 +131,13 @@ export function subscribeStorage(listener: (next: StorageStatus) => void): () =>
 
 function setStatus(patch: Partial<StorageStatus>): void {
   const next = { ...status, ...patch };
+  // The same problem reported twice (a retry hitting the same quota) is one
+  // state: subscribers are told once, and `at` keeps the moment it began.
   if (
     next.kind === status.kind &&
     next.error === status.error &&
     next.area === status.area &&
-    next.detail === status.detail &&
-    next.at === status.at
+    next.detail === status.detail
   ) {
     return;
   }
@@ -277,7 +326,7 @@ function readOne<T>(store: string, key: string): Promise<{ ok: boolean; value?: 
     void (async () => {
       const db = await openDb();
       if (!db) {
-        resolve({ ok: true, value: memory.get(store === STROKES ? `${STROKE_PREFIX}${key}` : WORKSPACE_KEY) as T | undefined });
+        resolve({ ok: true, value: memory.get(store === STROKES ? `${STROKE_PREFIX}${key}` : key) as T | undefined });
         return;
       }
       const area = areaOf(store);
@@ -294,6 +343,9 @@ function readOne<T>(store: string, key: string): Promise<{ ok: boolean; value?: 
       const done = (ok: boolean) => {
         if (settled) return;
         settled = true;
+        // A read that worked proves the store is readable again: the "읽지
+        // 못했습니다" notice goes away with it. A write failure is untouched.
+        if (ok && status.error === 'read') clearStorageError(area);
         resolve({ ok, value });
       };
       tx.oncomplete = () => done(true);
@@ -335,12 +387,176 @@ function optionsForRead(error: unknown): StorageErrorKind {
 export async function readWorkspace<T>(): Promise<WorkspaceRead<T>> {
   const result = await readOne<T>(WORKSPACE, WORKSPACE_KEY);
   if (!result.ok) return { ok: false, error: storageStatus().error ?? 'read' };
-  return { ok: true, value: result.value };
+  const revision = await readWorkspaceRevision();
+  return { ok: true, value: result.value, revision };
+}
+
+/** The revision the stored workspace carries (0 when it was written before revisions). */
+export async function readWorkspaceRevision(): Promise<number> {
+  const read = await readOne<unknown>(WORKSPACE, REVISION_KEY);
+  if (!read.ok) return 0;
+  return typeof read.value === 'number' && Number.isFinite(read.value) ? read.value : 0;
 }
 
 export async function getWorkspace<T>(): Promise<T | undefined> {
   const read = await readWorkspace<T>();
   return read.ok ? read.value : undefined;
+}
+
+/** One write plan: the workspace record, ink the same transaction carries, or both. */
+interface WorkspacePlan<W> {
+  workspace?: W;
+  /** Ink records the write replaces (a restore), keyed by slide id. */
+  putStrokes?: Record<string, unknown>;
+  deleteStrokeIds?: string[];
+  /** The restore empties the ink store before writing the copy. */
+  clearStrokes?: boolean;
+  /**
+   * The revision this tab last saw. When it is set and the stored record has
+   * moved on, nothing is written and the caller gets `conflict`.
+   */
+  expectedRevision?: number;
+}
+
+function planStores(plan: WorkspacePlan<unknown>): string[] {
+  const stores: string[] = [];
+  if (plan.workspace !== undefined) stores.push(WORKSPACE);
+  if (plan.clearStrokes || plan.deleteStrokeIds?.length || plan.putStrokes) stores.push(STROKES);
+  return stores.length ? stores : [WORKSPACE];
+}
+
+/** The memory mirror follows a committed transaction, for the fallback path. */
+function applyPlanToMemory(plan: WorkspacePlan<unknown>, workspaceRevision: number): void {
+  if (plan.workspace !== undefined) {
+    memory.set(WORKSPACE_KEY, plan.workspace);
+    memory.set(REVISION_KEY, workspaceRevision);
+  }
+  if (plan.clearStrokes) {
+    for (const key of [...memory.keys()]) if (key.startsWith(STROKE_PREFIX)) memory.delete(key);
+  }
+  for (const id of plan.deleteStrokeIds ?? []) memory.delete(`${STROKE_PREFIX}${id}`);
+  for (const [id, value] of Object.entries(plan.putStrokes ?? {})) {
+    const { revision } = normalizeStrokeRecord(memory.get(`${STROKE_PREFIX}${id}`));
+    memory.set(`${STROKE_PREFIX}${id}`, { revision: revision + 1, strokes: value });
+  }
+}
+
+/** Issues the ink half of a plan inside an open transaction. */
+function writeStrokesInto(
+  ink: IDBObjectStore,
+  plan: WorkspacePlan<unknown>,
+  fail: (error: unknown) => void,
+  abort: () => void,
+): void {
+  try {
+    if (plan.clearStrokes) ink.clear();
+    for (const id of plan.deleteStrokeIds ?? []) ink.delete(id);
+    for (const [id, value] of Object.entries(plan.putStrokes ?? {})) {
+      const existing = ink.get(id);
+      existing.onsuccess = () => {
+        const { revision } = normalizeStrokeRecord(existing.result);
+        try {
+          ink.put({ revision: revision + 1, strokes: value }, id);
+        } catch (error) {
+          fail(error);
+          abort();
+        }
+      };
+      existing.onerror = () => { /* the transaction reports it */ };
+    }
+  } catch (error) {
+    fail(error);
+    abort();
+  }
+}
+
+/**
+ * Runs one plan to completion. The workspace revision is read and compared in
+ * the same transaction that would write, so two tabs cannot both write from
+ * the same base: the second one is refused and told whose revision won.
+ */
+function runPlan<W>(plan: WorkspacePlan<W>): Promise<RevisionResult> {
+  return track((async () => {
+    const db = await openDb();
+    const expected = plan.expectedRevision;
+    if (!db) {
+      const storedRev = memoryRevision();
+      if (plan.workspace !== undefined && expected !== undefined && expected >= 0 && storedRev !== expected) {
+        return { ok: false, revision: storedRev, conflict: true };
+      }
+      const next = plan.workspace !== undefined ? storedRev + 1 : storedRev;
+      applyPlanToMemory(plan as WorkspacePlan<unknown>, next);
+      return { ok: true, revision: next };
+    }
+    const stores = planStores(plan as WorkspacePlan<unknown>);
+    const area = areaOf(stores[0]);
+    let tx: IDBTransaction;
+    try {
+      tx = db.transaction(stores, 'readwrite');
+    } catch (error) {
+      return { ok: false, revision: 0, error: reportAndClassify(error, area) };
+    }
+    return new Promise<RevisionResult>((resolve) => {
+      let settled = false;
+      let conflict = false;
+      let storedRev = 0;
+      let nextRev = 0;
+      const done = (result: RevisionResult) => {
+        if (settled) return;
+        settled = true;
+        resolve(result);
+      };
+      const fail = (error: unknown) => {
+        // The first reason is the specific one; the abort that follows a
+        // refused put must not relabel it as a plain write failure.
+        if (settled) return;
+        done({ ok: false, revision: storedRev, error: reportAndClassify(error, area) });
+      };
+      const abort = () => { try { tx.abort(); } catch { /* already gone */ } };
+      tx.oncomplete = () => {
+        if (conflict) {
+          done({ ok: false, revision: storedRev, conflict: true });
+          return;
+        }
+        clearStorageError(area);
+        applyPlanToMemory(plan as WorkspacePlan<unknown>, nextRev);
+        done({ ok: true, revision: nextRev });
+      };
+      tx.onerror = () => fail(tx.error);
+      tx.onabort = () => fail(tx.error);
+      try {
+        if (plan.workspace !== undefined) {
+          const store = tx.objectStore(WORKSPACE);
+          const request = store.get(REVISION_KEY);
+          request.onsuccess = () => {
+            storedRev = typeof request.result === 'number' && Number.isFinite(request.result) ? request.result : 0;
+            if (expected !== undefined && expected >= 0 && storedRev !== expected) {
+              conflict = true;
+              return;
+            }
+            nextRev = storedRev + 1;
+            try {
+              store.put(plan.workspace, WORKSPACE_KEY);
+              store.put(nextRev, REVISION_KEY);
+            } catch (error) {
+              fail(error);
+              abort();
+              return;
+            }
+            if (stores.includes(STROKES)) {
+              writeStrokesInto(tx.objectStore(STROKES), plan as WorkspacePlan<unknown>, fail, abort);
+            }
+          };
+          request.onerror = () => { /* the transaction reports it */ };
+        } else if (stores.includes(STROKES)) {
+          writeStrokesInto(tx.objectStore(STROKES), plan as WorkspacePlan<unknown>, fail, abort);
+        }
+      } catch (error) {
+        fail(error);
+        abort();
+      }
+    });
+  })());
 }
 
 /**
@@ -349,14 +565,16 @@ export async function getWorkspace<T>(): Promise<T | undefined> {
  * caller that must not delete ink on a failed save can tell the difference.
  */
 export function setWorkspace<T>(value: T): Promise<boolean> {
-  return track((async () => {
-    const ok = await runTransaction([WORKSPACE], 'readwrite', (tx) => {
-      tx.objectStore(WORKSPACE).put(value, WORKSPACE_KEY);
-    });
-    if (!ok) return false;
-    memory.set(WORKSPACE_KEY, value);
-    return true;
-  })());
+  return runPlan<T>({ workspace: value }).then((result) => result.ok);
+}
+
+/**
+ * Writes the workspace record only when this tab still holds the revision it
+ * last read. A newer stored revision means another tab wrote first; this tab's
+ * copy is not put over it — the caller shows the person both and lets them pick.
+ */
+export function setWorkspaceRevision<T>(value: T, expected: number): Promise<RevisionResult> {
+  return runPlan<T>({ workspace: value, expectedRevision: expected });
 }
 
 export interface WorkspaceCommit<W> {
@@ -371,32 +589,119 @@ export interface WorkspaceCommit<W> {
  * deck gone with its ink, or both still there. Never one without the other.
  */
 export function commitWorkspace<W>(commit: WorkspaceCommit<W>): Promise<boolean> {
-  return track((async () => {
-    const ok = await runTransaction([WORKSPACE, STROKES], 'readwrite', (tx) => {
-      tx.objectStore(WORKSPACE).put(commit.workspace, WORKSPACE_KEY);
-      const ink = tx.objectStore(STROKES);
-      for (const id of commit.deleteStrokeIds) ink.delete(id);
-    });
-    if (!ok) return false;
-    memory.set(WORKSPACE_KEY, commit.workspace);
-    for (const id of commit.deleteStrokeIds) memory.delete(`${STROKE_PREFIX}${id}`);
-    return true;
-  })());
+  return runPlan<W>({ workspace: commit.workspace, deleteStrokeIds: commit.deleteStrokeIds })
+    .then((result) => result.ok);
 }
 
-export async function getStrokes<T>(slideId: string): Promise<T | undefined> {
-  const result = await readOne<T>(STROKES, slideId);
-  return result.ok ? result.value : undefined;
+/** The revision-checked form: a deck deletion refuses to land over another tab's newer save. */
+export function commitWorkspaceRevision<W>(
+  commit: WorkspaceCommit<W>,
+  expected: number,
+): Promise<RevisionResult> {
+  return runPlan<W>({
+    workspace: commit.workspace,
+    deleteStrokeIds: commit.deleteStrokeIds,
+    expectedRevision: expected,
+  });
 }
 
-export function setStrokes<T>(slideId: string, value: T): Promise<boolean> {
+export async function getStrokes<T>(slideId: string): Promise<T[] | undefined> {
+  const result = await readOne<unknown>(STROKES, slideId);
+  if (!result.ok || result.value === undefined) return undefined;
+  return normalizeStrokeRecord<T>(result.value).strokes;
+}
+
+/**
+ * Reads one slide's ink, keeping "no record for this slide" apart from "the
+ * record could not be read". A read that failed must never look like empty ink:
+ * the room would then offer to draw over ink it simply could not see.
+ */
+export async function readStrokes<T>(slideId: string): Promise<
+  { ok: true; record: StrokeRecord<T>; present: boolean } | { ok: false; error: StorageErrorKind }
+> {
+  const read = await readOne<unknown>(STROKES, slideId);
+  if (!read.ok) return { ok: false, error: storageStatus().error ?? 'read' };
+  if (read.value === undefined) return { ok: true, record: { revision: 0, strokes: [] }, present: false };
+  return { ok: true, record: normalizeStrokeRecord<T>(read.value), present: true };
+}
+
+export function setStrokes<T>(slideId: string, value: T[]): Promise<boolean> {
+  return setStrokeRevision<T>(slideId, value, -1).then((result) => result.ok);
+}
+
+/**
+ * Writes one slide's ink under a revision check. Two tabs that both edited the
+ * same slide cannot merge stroke lists, so the later write is refused and the
+ * room asks which copy to keep instead of concatenating or dropping one.
+ */
+export function setStrokeRevision<T>(slideId: string, value: T[], expected: number): Promise<RevisionResult> {
   return track((async () => {
-    const ok = await runTransaction([STROKES], 'readwrite', (tx) => {
-      tx.objectStore(STROKES).put(value, slideId);
+    const db = await openDb();
+    const memKey = `${STROKE_PREFIX}${slideId}`;
+    if (!db) {
+      const current = normalizeStrokeRecord<T>(memory.get(memKey));
+      if (expected >= 0 && current.revision !== expected) {
+        return { ok: false, revision: current.revision, conflict: true };
+      }
+      const next = current.revision + 1;
+      memory.set(memKey, { revision: next, strokes: value });
+      return { ok: true, revision: next };
+    }
+    let tx: IDBTransaction;
+    try {
+      tx = db.transaction(STROKES, 'readwrite');
+    } catch (error) {
+      return { ok: false, revision: 0, error: reportAndClassify(error, 'strokes') };
+    }
+    return new Promise<RevisionResult>((resolve) => {
+      let settled = false;
+      let stored = 0;
+      let next = 0;
+      let conflict = false;
+      const done = (result: RevisionResult) => {
+        if (settled) return;
+        settled = true;
+        resolve(result);
+      };
+      const fail = (error: unknown) => {
+        if (settled) return;
+        done({ ok: false, revision: stored, error: reportAndClassify(error, 'strokes') });
+      };
+      const abort = () => { try { tx.abort(); } catch { /* already gone */ } };
+      tx.oncomplete = () => {
+        if (conflict) {
+          done({ ok: false, revision: stored, conflict: true });
+          return;
+        }
+        clearStorageError('strokes');
+        memory.set(memKey, { revision: next, strokes: value });
+        done({ ok: true, revision: next });
+      };
+      tx.onerror = () => fail(tx.error);
+      tx.onabort = () => fail(tx.error);
+      try {
+        const store = tx.objectStore(STROKES);
+        const request = store.get(slideId);
+        request.onsuccess = () => {
+          stored = normalizeStrokeRecord(request.result).revision;
+          if (expected >= 0 && stored !== expected) {
+            conflict = true;
+            return;
+          }
+          next = stored + 1;
+          try {
+            store.put({ revision: next, strokes: value }, slideId);
+          } catch (error) {
+            fail(error);
+            abort();
+          }
+        };
+        request.onerror = () => { /* the transaction reports it */ };
+      } catch (error) {
+        fail(error);
+        abort();
+      }
     });
-    if (!ok) return false;
-    memory.set(`${STROKE_PREFIX}${slideId}`, value);
-    return true;
   })());
 }
 
@@ -430,35 +735,55 @@ export interface WorkspaceReplace<W> {
  * carries without ink. Returns false when storage refused the write.
  */
 export function replaceWorkspace<W>(snapshot: WorkspaceReplace<W>): Promise<boolean> {
-  return track((async () => {
-    const ok = await runTransaction([WORKSPACE, STROKES], 'readwrite', (tx) => {
-      tx.objectStore(WORKSPACE).put(snapshot.workspace, WORKSPACE_KEY);
-      const ink = tx.objectStore(STROKES);
-      // The restored copy is the whole truth: anything else in the store is
-      // ink whose slide no longer exists (or whose slide the backup carries
-      // with no ink), so the store is emptied before the copy is written.
-      ink.clear();
-      for (const [id, value] of Object.entries(snapshot.strokes)) ink.put(value, id);
-    });
-    if (!ok) return false;
-    memory.set(WORKSPACE_KEY, snapshot.workspace);
-    for (const key of [...memory.keys()]) {
-      if (key.startsWith(STROKE_PREFIX)) memory.delete(key);
-    }
-    for (const [id, value] of Object.entries(snapshot.strokes)) {
-      memory.set(`${STROKE_PREFIX}${id}`, value);
-    }
-    return true;
-  })());
+  return runPlan<W>({
+    workspace: snapshot.workspace,
+    clearStrokes: true,
+    putStrokes: snapshot.strokes,
+  }).then((result) => result.ok);
 }
 
-export async function loadAllStrokes(slideIds: string[]): Promise<Record<string, unknown>> {
-  const out: Record<string, unknown> = {};
+/** The revision-checked form: a restore refuses to land over another tab's newer save. */
+export function replaceWorkspaceRevision<W>(
+  snapshot: WorkspaceReplace<W>,
+  expected: number,
+): Promise<RevisionResult> {
+  return runPlan<W>({
+    workspace: snapshot.workspace,
+    clearStrokes: true,
+    putStrokes: snapshot.strokes,
+    expectedRevision: expected,
+  });
+}
+
+export interface StrokesSnapshot<T> {
+  strokes: Record<string, T[]>;
+  revisions: Record<string, number>;
+}
+
+/**
+ * The whole ink shelf for a deck list. `ok: false` means at least one record
+ * could not be read — which is not the same as that slide having no ink, and
+ * the room must not treat it as such (no sample upgrade, no saving until the
+ * read works again).
+ */
+export type StrokesRead<T> =
+  | ({ ok: true } & StrokesSnapshot<T>)
+  | { ok: false; error: StorageErrorKind; slideIds: string[] };
+
+export async function loadAllStrokes<T>(slideIds: string[]): Promise<StrokesRead<T>> {
+  const strokes: Record<string, T[]> = {};
+  const revisions: Record<string, number> = {};
   for (const id of slideIds) {
-    const value = await getStrokes(id);
-    if (value) out[id] = value;
+    const read = await readStrokes<T>(id);
+    if (!read.ok) return { ok: false, error: read.error, slideIds: [id] };
+    if (read.present) {
+      strokes[id] = read.record.strokes;
+      revisions[id] = read.record.revision;
+    } else {
+      revisions[id] = 0;
+    }
   }
-  return out;
+  return { ok: true, strokes, revisions };
 }
 
 /** Test hook: clears the in-memory fallback between cases. */
